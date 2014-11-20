@@ -4,12 +4,21 @@ Description: base types
 contains a couple basic types for Respond
 -}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Web.Respond.Types where
 
 import Network.Wai
 import qualified Data.Text as T
+import Control.Applicative ((<$>))
+
 import Control.Monad.Trans.State
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Sequence as S
+import Data.Aeson (FromJSON, eitherDecode)
+import Data.String (fromString)
 
 import Control.Lens (makeLenses, snoc, (%=), uses)
 import Safe (headMay, tailSafe)
@@ -54,3 +63,27 @@ pcConsumeNext = execState $ do
     next <- uses pcUnconsumed headMay
     pcConsumed %= maybe id (flip snoc) next
     pcUnconsumed %= tailSafe
+
+-- * working with the body
+
+-- | represent an error by turning it into a bytestring.
+class ErrorRep e where
+    errorText :: e -> T.Text
+
+instance ErrorRep T.Text where
+    errorText = id
+
+instance ErrorRep String where
+    errorText = fromString
+
+-- | something that can be pulled from the body, restricted to an error
+-- type
+class ErrorRep e => FromBody e a | a -> e where
+    fromBody :: ErrorRep e => LBS.ByteString -> Either e a
+
+-- | newtype for parsing from a json body
+newtype Json a = Json { getJson :: a }
+
+instance FromJSON a => FromBody String (Json a) where
+    fromBody = (Json <$>) . eitherDecode
+

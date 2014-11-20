@@ -38,7 +38,11 @@ assembleHandler = matchPath $
 apiRoot :: Example ResponseReceived
 apiRoot = matchMethod $
     onGET (respond $ OkJson (object ["location" .= ("here" :: T.Text)])) <>
-    onPUT (respond $ OkJson (object ["location" .= ("there" :: T.Text)]))
+    onPUT (respond $ OkJson (object ["location" .= ("there" :: T.Text)])) <>
+    onPOST (withRequiredBody showPostedValue)
+    where
+    showPostedValue :: Json Value -> Example ResponseReceived
+    showPostedValue (Json v) = respond $ OkJson ["location" .= ("cold" :: T.Text), "recvd" .= v]
 
 firstHandler :: T.Text -> Example ResponseReceived
 firstHandler p = do 

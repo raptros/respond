@@ -29,6 +29,8 @@ module Web.Respond.Monad (
                          rehUnmatchedPath, 
                          -- | getter for path parse failed handler
                          rehPathParseFailed,
+                         -- | getter for body parse failure
+                         rehBodyParseFailed
                          ) where
 
 import Control.Applicative
@@ -71,7 +73,9 @@ data RequestErrorHandlers = RequestErrorHandlers {
     -- | what to do if the request path has no matches
     _rehUnmatchedPath :: MonadRespond m => m ResponseReceived,
     -- | what to do if components of the path can't be parsed
-    _rehPathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived
+    _rehPathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived,
+    -- | what to do if the body failed to parse
+    _rehBodyParseFailed :: MonadRespond m => T.Text -> m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers

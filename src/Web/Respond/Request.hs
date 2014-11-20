@@ -8,14 +8,19 @@ module Web.Respond.Request where
 import Network.Wai
 import Network.HTTP.Types.Method
 import qualified Data.Map.Lazy as Map
+import qualified Data.ByteString.Lazy as LBS
 import Control.Lens (at, (^.), (<&>), to)
 import Data.Maybe (fromMaybe)
+import Control.Applicative ((<$>))
 
 import Data.Monoid
 import Data.Function (on)
+import Control.Monad.IO.Class (liftIO)
 
+import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
+import Data.Aeson
 
 -- * matching methods
 --
@@ -74,3 +79,39 @@ onOPTIONS = onMethod OPTIONS
 onPATCH :: a -> MethodMatcher a
 onPATCH = onMethod PATCH
 
+-- * extracting the request body
+
+-- | gets the body as a lazy ByteString using lazy IO (see 'Network.Wai.lazyRequestBody')
+getBodyLazy :: MonadRespond m => m LBS.ByteString
+getBodyLazy = getRequest >>= liftIO . lazyRequestBody
+
+-- | gets you a function of the body, using lazy IO
+getBodyAsLazy :: MonadRespond m => (LBS.ByteString -> a) -> m a
+getBodyAsLazy = (<$> getBodyLazy)
+
+-- ** as JSON
+
+-- | parse the body as json, defer decoding
+parseJsonBody :: (FromJSON a, MonadRespond m) => m (Maybe a)
+parseJsonBody = getBodyAsLazy decode
+
+-- | parse the body as json, decode immediately
+parseJsonBody' :: (FromJSON a, MonadRespond m) => m (Maybe a)
+parseJsonBody' = getBodyAsLazy decode'
+
+-- | same as 'parseJsonBody' except wih an error string
+parseJsonBodyEither :: (FromJSON a, MonadRespond m) => m (Either String a)
+parseJsonBodyEither = getBodyAsLazy eitherDecode
+
+-- | same as 'parseJsonBody'' except wih an error string
+parseJsonBodyEither' :: (FromJSON a, MonadRespond m) => m (Either String a)
+parseJsonBodyEither' = getBodyAsLazy eitherDecode'
+
+-- ** fancy extraction
+
+-- | use a FromBody instance to parse the body.
+extractFromBody :: (ErrorRep e, FromBody e a, MonadRespond m) => m (Either e a)
+extractFromBody = getBodyAsLazy fromBody
+
+withRequiredBody :: (ErrorRep e, FromBody e a, MonadRespond m) => (a -> m ResponseReceived) -> m ResponseReceived
+withRequiredBody action = extractFromBody >>= either handleBodyParseFailure action
