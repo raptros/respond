@@ -118,8 +118,17 @@ withRequiredBody action = extractFromBody >>= either handleBodyParseFailure acti
 
 -- * authentication and authorization
 
+-- | authenticate uses the result of the authentication action (if it
+-- succssfully produced a result) to run the inner action function.
+-- otherwise, it uses 'handleAuthFailed'.
 authenticate :: MonadRespond m => m (Maybe a) -> (a -> m ResponseReceived) -> m ResponseReceived
 authenticate auth inner = auth >>= maybe handleAuthFailed inner
+
+-- | reauthenticate tries to use a prior authentication value to run the
+-- inner action; if it's not availalble, it falls back to 'authenticate' to
+-- apply the auth action and run the inner action.
+reauthenticate :: MonadRespond m => Maybe a -> m (Maybe a) -> (a -> m ResponseReceived) -> m ResponseReceived
+reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior 
 
 authorize :: MonadRespond m => m Bool -> m ResponseReceived -> m ResponseReceived
 authorize check inner = ifM check inner handleDenied 
