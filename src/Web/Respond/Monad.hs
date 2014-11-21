@@ -20,6 +20,7 @@ module Web.Respond.Monad (
                          -- ** an implementation
                          RespondT,
                          runRespondT,
+                         mapRespondT,
                          -- * handling errors
                          RequestErrorHandlers(..),
                          -- ** lenses
@@ -30,19 +31,23 @@ module Web.Respond.Monad (
                          -- | getter for path parse failed handler
                          rehPathParseFailed,
                          -- | getter for body parse failure
-                         rehBodyParseFailed
+                         rehBodyParseFailed,
+                         -- | you know
+                         rehAuthFailed,
+                         rehDenied
                          ) where
 
 import Control.Applicative
 import Network.Wai
 import Network.HTTP.Types.Method
 import qualified Data.Text as T
-import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT, mapReaderT)
 import Control.Monad.Reader.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Base (MonadBase, liftBase, liftBaseDefault)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith, restoreT, defaultLiftWith, defaultRestoreT, MonadBaseControl, StM, liftBaseWith, defaultLiftBaseWith, restoreM, defaultRestoreM, ComposeSt)
 import Control.Monad.Trans.Class
+import Control.Monad.Logger
 
 import Control.Lens ((%~), makeLenses, view)
 import Web.Respond.Types
@@ -75,7 +80,11 @@ data RequestErrorHandlers = RequestErrorHandlers {
     -- | what to do if components of the path can't be parsed
     _rehPathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived,
     -- | what to do if the body failed to parse
-    _rehBodyParseFailed :: MonadRespond m => T.Text -> m ResponseReceived
+    _rehBodyParseFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    -- | what to do when authentication fails
+    _rehAuthFailed :: MonadRespond m => m ResponseReceived,
+    -- | what to do when authorization fails
+    _rehDenied :: MonadRespond m => m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers
@@ -109,6 +118,9 @@ instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
 runRespondT :: RespondT m a -> RequestErrorHandlers -> Request -> Responder -> m a
 runRespondT (RespondT act) handlers req res = runReaderT act $ RespondData handlers req res (mkPathConsumer $ pathInfo req)
 
+mapRespondT :: (m a -> n b) -> RespondT m a -> RespondT n b
+mapRespondT f = RespondT . mapReaderT f . unRespondT
+
 instance MonadTrans RespondT where
     lift act = RespondT $ lift act
 
@@ -132,4 +144,6 @@ instance MonadBaseControl b m => MonadBaseControl b (RespondT m) where
     liftBaseWith = defaultLiftBaseWith StMT
     restoreM     = defaultRestoreM   unStMT
 
+instance MonadLogger m => MonadLogger (RespondT m) where
+    monadLoggerLog loc src level msg = lift $ monadLoggerLog loc src level msg
 

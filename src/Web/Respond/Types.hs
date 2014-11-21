@@ -12,15 +12,14 @@ module Web.Respond.Types where
 
 import Network.Wai
 import qualified Data.Text as T
-import Control.Applicative ((<$>))
 
 import Control.Monad.Trans.State
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Sequence as S
-import Data.Aeson (FromJSON, eitherDecode)
+import Data.Aeson
 import Data.String (fromString)
 
-import Control.Lens (makeLenses, snoc, (%=), uses)
+import Control.Lens (makeLenses, snoc, (%=), uses, (%~), _Left, _Right)
 import Safe (headMay, tailSafe)
 
 -- * responding
@@ -64,26 +63,41 @@ pcConsumeNext = execState $ do
     pcConsumed %= maybe id (flip snoc) next
     pcUnconsumed %= tailSafe
 
+-- * errors
+
+-- | an error report is something that can be sent back as a response
+-- without having to worry about it too much
+data ErrorReport = ErrorReport {
+    erReason :: T.Text,
+    erMessage :: Maybe T.Text,
+    erDetails :: Maybe Value
+}
+
+instance ToJSON ErrorReport where
+    toJSON er = object ["reason" .= erReason er, "message" .= erMessage er, "details" .= erDetails er]
+
+-- | define how an error type should be reported.
+-- you probably want to newtype when using this.
+class ReportableError e where
+    toErrorReport :: e -> ErrorReport
+
+-- | JsonParseErrors get reported a certain way
+newtype JsonParseError = JsonParseError String
+
+instance ReportableError JsonParseError where
+    toErrorReport (JsonParseError msg) = ErrorReport "parse_failed" (Just $ fromString msg) Nothing
+
+
 -- * working with the body
-
--- | represent an error by turning it into a bytestring.
-class ErrorRep e where
-    errorText :: e -> T.Text
-
-instance ErrorRep T.Text where
-    errorText = id
-
-instance ErrorRep String where
-    errorText = fromString
 
 -- | something that can be pulled from the body, restricted to an error
 -- type
-class ErrorRep e => FromBody e a | a -> e where
-    fromBody :: ErrorRep e => LBS.ByteString -> Either e a
+class ReportableError e => FromBody e a | a -> e where
+    fromBody :: ReportableError e => LBS.ByteString -> Either e a
 
 -- | newtype for parsing from a json body
 newtype Json a = Json { getJson :: a }
 
-instance FromJSON a => FromBody String (Json a) where
-    fromBody = (Json <$>) . eitherDecode
+instance FromJSON a => FromBody JsonParseError (Json a) where
+    fromBody = (_Left %~ JsonParseError) . (_Right %~ Json) . eitherDecode
 

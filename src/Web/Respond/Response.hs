@@ -67,32 +67,6 @@ headerCTJson = mkContentType contentTypeJson
 responseJson :: ToJSON a => Status -> ResponseHeaders -> a -> Response
 responseJson s hs a = responseLBS s (headerCTJson : hs) (encode a)
 
--- | default error handlers
---
--- @
--- 'RequestErrorHandlers' 'defaultUnsupportedMethodHandler' 'defaultUnmatchedPathHandler' 'defaultPathParseFailedHandler'
--- @
-defaultRequestErrorHandlers :: RequestErrorHandlers
-defaultRequestErrorHandlers = RequestErrorHandlers defaultUnsupportedMethodHandler defaultUnmatchedPathHandler defaultPathParseFailedHandler defaultBodyParseFailureHandler
-
--- | default unsupported method handler sends back an EmptyBody with status
--- 405 and an Allowed header listing the allowed methods in the first path
-defaultUnsupportedMethodHandler :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived
-defaultUnsupportedMethodHandler allowed _ = respond $ EmptyBody methodNotAllowed405 [("Allowed", allowedStr)]
-    where allowedStr = BS.intercalate ", " (renderStdMethod <$> allowed)
-
--- | respond with status404 and nothing else
-defaultUnmatchedPathHandler :: MonadRespond m => m ResponseReceived
-defaultUnmatchedPathHandler = respond $ EmptyBody status404 []
-
--- | respond with status 400 and the list of bad elements in the path
-defaultPathParseFailedHandler :: MonadRespond m => [T.Text] -> m ResponseReceived
-defaultPathParseFailedHandler failedOn = respond $ DefaultHeaders badRequest400 ["badPath" .= failedOn]
-
--- | respond with status 400 and a message about the body parse failure
-defaultBodyParseFailureHandler :: MonadRespond m => T.Text -> m ResponseReceived
-defaultBodyParseFailureHandler msg = respond $ DefaultHeaders badRequest400 ["parseFailed" .= msg]
-
 -- | an action that gets the currently installed unsupported method handler
 -- and applies it to the arguments
 handleUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived
@@ -109,12 +83,19 @@ handlePathParseFailed parts = getREH (view rehPathParseFailed) >>= \handler -> h
 
 -- | an action that gets the installed body parse failure handler and
 -- applies it
-handleBodyParseFailure :: (MonadRespond m, ErrorRep e) => e -> m ResponseReceived
-handleBodyParseFailure e = getREH (view rehBodyParseFailed) >>= \handler -> handler (errorText e)
+handleBodyParseFailure :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+handleBodyParseFailure e = getREH (view rehBodyParseFailed) >>= \handler -> handler (toErrorReport e)
+
+-- | get and use installed auth failed handler
+handleAuthFailed :: MonadRespond m => m ResponseReceived
+handleAuthFailed = join (getREH (view rehAuthFailed))
+
+-- | get and use denied handler
+handleDenied :: MonadRespond m => m ResponseReceived
+handleDenied = join (getREH (view rehDenied))
 
 -- | get a specific handler.
 --
 -- > getREH = (<$> getREHs)
 getREH :: MonadRespond m => (RequestErrorHandlers -> a) -> m a
 getREH = (<$> getREHs)
-

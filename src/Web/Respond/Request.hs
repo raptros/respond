@@ -110,8 +110,19 @@ parseJsonBodyEither' = getBodyAsLazy eitherDecode'
 -- ** fancy extraction
 
 -- | use a FromBody instance to parse the body.
-extractFromBody :: (ErrorRep e, FromBody e a, MonadRespond m) => m (Either e a)
+extractFromBody :: (ReportableError e, FromBody e a, MonadRespond m) => m (Either e a)
 extractFromBody = getBodyAsLazy fromBody
 
-withRequiredBody :: (ErrorRep e, FromBody e a, MonadRespond m) => (a -> m ResponseReceived) -> m ResponseReceived
+withRequiredBody :: (ReportableError e, FromBody e a, MonadRespond m) => (a -> m ResponseReceived) -> m ResponseReceived
 withRequiredBody action = extractFromBody >>= either handleBodyParseFailure action
+
+-- * authentication and authorization
+
+authenticate :: MonadRespond m => m (Maybe a) -> (a -> m ResponseReceived) -> m ResponseReceived
+authenticate auth inner = auth >>= maybe handleAuthFailed inner
+
+authorize :: MonadRespond m => m Bool -> m ResponseReceived -> m ResponseReceived
+authorize check inner = ifM check inner handleDenied 
+
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM cond yes no = cond >>= \a -> if a then yes else no 

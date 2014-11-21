@@ -27,3 +27,5 @@ hListUncurry :: HListElim ts a -> HList ts -> a
 hListUncurry f HNil = f
 hListUncurry f (HCons x xs) = hListUncurry (f x) xs
 
+hListMapTo1 :: HListElim ts a -> HList ts -> HList1 a
+hListMapTo1 f hl = hListUncurry f hl .*. HNil

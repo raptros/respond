@@ -22,6 +22,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
+import Web.Respond.DefaultHandlers
 import Web.Respond.Request
 import Web.Respond.Path
 

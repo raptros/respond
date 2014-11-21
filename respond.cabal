@@ -31,6 +31,7 @@ library
         Web.Respond.Types
         Web.Respond.Monad
         Web.Respond.Response
+        Web.Respond.DefaultHandlers
         Web.Respond.Request
         Web.Respond.HListUtils
         Web.Respond.Path
