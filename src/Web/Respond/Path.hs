@@ -144,7 +144,7 @@ predicateExtractor = unitExtractor . (mayWhen () .)
 -- element in the list. this matches it. it's just
 --
 -- @
--- 'predicateExtractor' 'Data.Text.null'
+-- slashEnd = 'predicateExtractor' 'Data.Text.null'
 -- @
 slashEnd :: PathExtractor0
 slashEnd = predicateExtractor T.null
@@ -152,7 +152,7 @@ slashEnd = predicateExtractor T.null
 -- | best way to match the path end. it's just
 --
 -- @ 
--- 'pathEnd' 'Control.Applicative.<|>' 'slashEnd'
+-- endOrSlash = 'pathEnd' 'Control.Applicative.<|>' 'slashEnd'
 -- @
 endOrSlash :: PathExtractor0
 endOrSlash = pathEnd <|> slashEnd
@@ -198,7 +198,7 @@ getUnconsumedPath = _pcUnconsumed <$> getPath
 
 -- | get the next unconsumed path segment if there is one
 --
--- > headMay <$> getUnconsumedPath
+-- > getNextSegment = headMay <$> getUnconsumedPath
 getNextSegment :: MonadRespond m => m (Maybe T.Text)
 getNextSegment = headMay <$> getUnconsumedPath
 

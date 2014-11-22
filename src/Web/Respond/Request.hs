@@ -142,6 +142,12 @@ reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior
 authorize :: (ReportableError e, MonadRespond m) => m (Maybe e) -> m ResponseReceived -> m ResponseReceived
 authorize check inner = check >>= maybe inner handleDenied
 
+-- | authorize using an action that produces an Either. if the action
+-- results in Left, fail using 'handleDenied' with the ReportableError.
+-- if it results in Right, run the inner action using the produced value
+authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
+authorizeE check inner = check >>= either handleDenied inner
+
 ifM :: Monad m => m Bool -> m a -> m a -> m a
 ifM cond yes no = cond >>= \a -> if a then yes else no 
 

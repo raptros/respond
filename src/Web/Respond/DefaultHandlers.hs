@@ -24,7 +24,7 @@ import Web.Respond.Response
 -- | default error handlers
 --
 -- @
--- 'RequestErrorHandlers' 'defaultUnsupportedMethodHandler' 'defaultUnmatchedPathHandler' 'defaultPathParseFailedHandler'
+-- defaultRequestErrorHandlers = 'RequestErrorHandlers' 'defaultUnsupportedMethodHandler' 'defaultUnmatchedPathHandler' 'defaultPathParseFailedHandler'
 -- @
 defaultRequestErrorHandlers :: RequestErrorHandlers
 defaultRequestErrorHandlers = RequestErrorHandlers defaultUnsupportedMethodHandler defaultUnmatchedPathHandler defaultPathParseFailedHandler defaultBodyParseFailureHandler defaultAuthFailedHandler defaultDeniedHandler
