@@ -196,3 +196,12 @@ getNextSegment = headMay <$> getUnconsumedPath
 withNextSegmentConsumed :: MonadRespond m => m a -> m a
 withNextSegmentConsumed = withPath pcConsumeNext
 
+-- ** things you can get out of paths
+
+-- | natural numbers starting with 1. you can get this out of a path.
+newtype Natural = Natural Integer deriving (Eq, Show)
+
+instance PathPiece Natural where
+    toPathPiece (Natural i) = T.pack $ show i 
+    fromPathPiece s = fromPathPiece s >>= \i -> (if i < 1 then Nothing else Just $ Natural i)
+
