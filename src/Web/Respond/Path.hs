@@ -100,6 +100,18 @@ path extractor f = PathMatcher $ \p -> do
     let action = hListUncurry f v
     return $ usePath p' action
 
+-- | a simple matcher for being at the end of the path.
+-- 
+-- > pathEndOrSlash = path endOrSlash
+pathEndOrSlash :: MonadRespond m => m a -> PathMatcher (m a)
+pathEndOrSlash = path endOrSlash
+
+-- | a simple matcher for the last segment of a path
+--
+-- > pathLastSeg s = path (seg s </> endOrSlash)
+pathLastSeg :: MonadRespond m => T.Text -> m a -> PathMatcher (m a)
+pathLastSeg s = path (seg s </> endOrSlash)
+
 -- | combine two path extractors in sequence.
 (</>) :: PathExtractor (HList l) -> PathExtractor (HList r) -> PathExtractor (HList (HAppendList l r))
 (</>) = liftA2 hAppendList

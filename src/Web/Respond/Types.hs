@@ -81,12 +81,14 @@ instance ToJSON ErrorReport where
 class ReportableError e where
     toErrorReport :: e -> ErrorReport
 
+instance ReportableError ErrorReport where
+    toErrorReport = id
+
 -- | JsonParseErrors get reported a certain way
 newtype JsonParseError = JsonParseError String
 
 instance ReportableError JsonParseError where
     toErrorReport (JsonParseError msg) = ErrorReport "parse_failed" (Just $ fromString msg) Nothing
-
 
 -- * working with the body
 

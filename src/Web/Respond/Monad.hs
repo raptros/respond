@@ -42,6 +42,8 @@ import Network.Wai
 import Network.HTTP.Types.Method
 import qualified Data.Text as T
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, mapReaderT)
+import Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
+import Control.Monad.Trans.Except (ExceptT, mapExceptT)
 import Control.Monad.Reader.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Base (MonadBase, liftBase, liftBaseDefault)
@@ -70,6 +72,22 @@ class (Functor m, MonadIO m) => MonadRespond m where
     -- | run the inner action with an updated path state.
     withPath :: (PathConsumer -> PathConsumer) -> m a -> m a
 
+instance MonadRespond m => MonadRespond (ExceptT e m) where
+    respond = lift . respond
+    getRequest = lift getRequest
+    getREHs = lift getREHs
+    withREHs = mapExceptT . withREHs
+    getPath = lift getPath
+    withPath = mapExceptT . withPath
+
+instance MonadRespond m => MonadRespond (MaybeT m) where
+    respond = lift . respond
+    getRequest = lift getRequest
+    getREHs = lift getREHs
+    withREHs = mapMaybeT . withREHs
+    getPath = lift getPath
+    withPath = mapMaybeT . withPath
+
 -- | record containing responders that request matching tools can use when
 -- failures occur.
 data RequestErrorHandlers = RequestErrorHandlers {
@@ -82,9 +100,9 @@ data RequestErrorHandlers = RequestErrorHandlers {
     -- | what to do if the body failed to parse
     _rehBodyParseFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
     -- | what to do when authentication fails
-    _rehAuthFailed :: MonadRespond m => m ResponseReceived,
+    _rehAuthFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
     -- | what to do when authorization fails
-    _rehDenied :: MonadRespond m => m ResponseReceived
+    _rehDenied :: MonadRespond m => ErrorReport -> m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers

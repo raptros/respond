@@ -7,11 +7,13 @@ module Web.Respond.Request where
 
 import Network.Wai
 import Network.HTTP.Types.Method
+import Network.HTTP.Types.Header
 import qualified Data.Map.Lazy as Map
 import qualified Data.ByteString.Lazy as LBS
 import Control.Lens (at, (^.), (<&>), to)
 import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>))
+import qualified Data.ByteString as BS
 
 import Data.Monoid
 import Data.Function (on)
@@ -54,6 +56,10 @@ onMethod = (MethodMatcher .) . Map.singleton
 
 onGET :: a -> MethodMatcher a
 onGET = onMethod GET
+
+-- | shortcut for 'matchMethod . onGET'
+matchGET :: MonadRespond m => m ResponseReceived -> m ResponseReceived
+matchGET = matchMethod . onGET
 
 onPOST :: a -> MethodMatcher a
 onPOST = onMethod POST
@@ -121,17 +127,24 @@ withRequiredBody action = extractFromBody >>= either handleBodyParseFailure acti
 -- | authenticate uses the result of the authentication action (if it
 -- succssfully produced a result) to run the inner action function.
 -- otherwise, it uses 'handleAuthFailed'.
-authenticate :: MonadRespond m => m (Maybe a) -> (a -> m ResponseReceived) -> m ResponseReceived
-authenticate auth inner = auth >>= maybe handleAuthFailed inner
+authenticate :: (MonadRespond m, ReportableError e) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
+authenticate auth inner = auth >>= either handleAuthFailed inner
 
 -- | reauthenticate tries to use a prior authentication value to run the
 -- inner action; if it's not availalble, it falls back to 'authenticate' to
 -- apply the auth action and run the inner action.
-reauthenticate :: MonadRespond m => Maybe a -> m (Maybe a) -> (a -> m ResponseReceived) -> m ResponseReceived
+reauthenticate :: (MonadRespond m, ReportableError e) => Maybe a -> m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior 
 
-authorize :: MonadRespond m => m Bool -> m ResponseReceived -> m ResponseReceived
-authorize check inner = ifM check inner handleDenied 
+-- | if the authorization action (m (Maybe e)) returns a value, respond
+-- immediately using 'handleDenied'. if the auth action produces Nothing,
+-- run the inner route.
+authorize :: (ReportableError e, MonadRespond m) => m (Maybe e) -> m ResponseReceived -> m ResponseReceived
+authorize check inner = check >>= maybe inner handleDenied
 
 ifM :: Monad m => m Bool -> m a -> m a -> m a
 ifM cond yes no = cond >>= \a -> if a then yes else no 
+
+-- * headers
+findHeader :: MonadRespond m => HeaderName -> m (Maybe BS.ByteString)
+findHeader header = (lookup header) . requestHeaders <$> getRequest

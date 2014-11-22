@@ -50,6 +50,12 @@ data EmptyBody = EmptyBody Status ResponseHeaders
 instance ToResponse EmptyBody where
     toResponse (EmptyBody status hdrs) = responseLBS status (headerCTJson : (hContentLength, "0") : hdrs) ""
 
+-- | use a ReportableError as a response
+data ResponseError e = ResponseError Status e
+
+instance ReportableError e => ToResponse (ResponseError e) where
+    toResponse (ResponseError status e) = responseJson status [] (toErrorReport e)
+
 -- | the bytestring "application/json"
 contentTypeJson :: BS.ByteString
 contentTypeJson = "application/json"
@@ -87,12 +93,12 @@ handleBodyParseFailure :: (MonadRespond m, ReportableError e) => e -> m Response
 handleBodyParseFailure e = getREH (view rehBodyParseFailed) >>= \handler -> handler (toErrorReport e)
 
 -- | get and use installed auth failed handler
-handleAuthFailed :: MonadRespond m => m ResponseReceived
-handleAuthFailed = join (getREH (view rehAuthFailed))
+handleAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+handleAuthFailed e = getREH (view rehAuthFailed) >>= \handler -> handler (toErrorReport e)
 
 -- | get and use denied handler
-handleDenied :: MonadRespond m => m ResponseReceived
-handleDenied = join (getREH (view rehDenied))
+handleDenied :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
+handleDenied e = getREH (view rehDenied) >>= \handler -> handler (toErrorReport e)
 
 -- | get a specific handler.
 --
