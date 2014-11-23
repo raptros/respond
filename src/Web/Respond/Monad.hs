@@ -23,18 +23,14 @@ module Web.Respond.Monad (
                          mapRespondT,
                          -- * handling errors
                          RequestErrorHandlers(..),
-                         -- ** lenses
-                         -- | getter for unsupported method handler
+                         -- ** Getters for each handler
                          rehUnsupportedMethod, 
-                         -- | getter for unmatched path handler
                          rehUnmatchedPath, 
-                         -- | getter for path parse failed handler
                          rehPathParseFailed,
-                         -- | getter for body parse failure
                          rehBodyParseFailed,
-                         -- | you know
                          rehAuthFailed,
-                         rehDenied
+                         rehDenied,
+                         rehException
                          ) where
 
 import Control.Applicative
@@ -50,6 +46,7 @@ import Control.Monad.Base (MonadBase, liftBase, liftBaseDefault)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith, restoreT, defaultLiftWith, defaultRestoreT, MonadBaseControl, StM, liftBaseWith, defaultLiftBaseWith, restoreM, defaultRestoreM, ComposeSt)
 import Control.Monad.Trans.Class
 import Control.Monad.Logger
+import Control.Monad.Catch
 
 import Control.Lens ((%~), makeLenses, view)
 import Web.Respond.Types
@@ -102,7 +99,9 @@ data RequestErrorHandlers = RequestErrorHandlers {
     -- | what to do when authentication fails
     _rehAuthFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
     -- | what to do when authorization fails
-    _rehDenied :: MonadRespond m => ErrorReport -> m ResponseReceived
+    _rehDenied :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    -- | what to do when an exception has been caught
+    _rehException :: MonadRespond m => ErrorReport -> m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers
@@ -144,6 +143,12 @@ instance MonadTrans RespondT where
 
 instance MonadIO m => MonadIO (RespondT m) where
     liftIO act = RespondT $ liftIO act
+
+instance MonadThrow m => MonadThrow (RespondT m) where
+    throwM = lift . throwM
+
+instance MonadCatch m => MonadCatch (RespondT m) where
+    catch act h = RespondT $ catch (unRespondT act) (\e -> unRespondT (h e))
 
 --these next three son of a gun all need UndecidableInstances
 

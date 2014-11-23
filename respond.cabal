@@ -35,12 +35,14 @@ library
         Web.Respond.Request
         Web.Respond.HListUtils
         Web.Respond.Path
-        Web.DefaultRespondServer
+        Web.Respond.DefaultServer
+        Web.Respond.Run
     build-depends:
         base >=4.7 && <4.8,
         transformers-base == 0.4.*,
         monad-control == 0.3.*,
         data-default-class,
+        exceptions >= 0.6 && < 0.7,
         fast-logger == 2.*,
         transformers == 0.4.*,
         safe >= 0.3 && < 0.4,

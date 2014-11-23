@@ -148,6 +148,7 @@ authorize check inner = check >>= maybe inner handleDenied
 authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 authorizeE check inner = check >>= either handleDenied inner
 
+-- | this is a stupid little trick.
 ifM :: Monad m => m Bool -> m a -> m a -> m a
 ifM cond yes no = cond >>= \a -> if a then yes else no 
 

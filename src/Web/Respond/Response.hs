@@ -17,9 +17,12 @@ import Network.HTTP.Types.Method
 import qualified Data.Text as T
 import Control.Lens (view)
 import Control.Monad (join)
+import Control.Monad.Catch
 
 import Web.Respond.Types
 import Web.Respond.Monad
+
+-- * Response construction
 
 -- | AsJson is a 'ToResponse' instance for sending JSON responses.
 data AsJson a =
@@ -50,11 +53,13 @@ data EmptyBody = EmptyBody Status ResponseHeaders
 instance ToResponse EmptyBody where
     toResponse (EmptyBody status hdrs) = responseLBS status (headerCTJson : (hContentLength, "0") : hdrs) ""
 
--- | use a ReportableError as a response
+-- | use a ReportableError as a response; the response will be Json.
 data ResponseError e = ResponseError Status e
 
 instance ReportableError e => ToResponse (ResponseError e) where
     toResponse (ResponseError status e) = responseJson status [] (toErrorReport e)
+
+-- ** definitions for building responses
 
 -- | the bytestring "application/json"
 contentTypeJson :: BS.ByteString
@@ -73,6 +78,8 @@ headerCTJson = mkContentType contentTypeJson
 responseJson :: ToJSON a => Status -> ResponseHeaders -> a -> Response
 responseJson s hs a = responseLBS s (headerCTJson : hs) (encode a)
 
+-- * use the RequestErrorHandlers
+
 -- | an action that gets the currently installed unsupported method handler
 -- and applies it to the arguments
 handleUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived
@@ -87,21 +94,42 @@ handleUnmatchedPath = join (getREH (view rehUnmatchedPath))
 handlePathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived
 handlePathParseFailed parts = getREH (view rehPathParseFailed) >>= \handler -> handler parts
 
+-- | generic handler-getter for things that use ErrorReports
+useHandlerForReport :: (MonadRespond m, ReportableError e) => (RequestErrorHandlers -> ErrorReport -> m ResponseReceived) -> e -> m ResponseReceived
+useHandlerForReport getter e = getREH getter >>= \handler -> handler (toErrorReport e)
+
+
 -- | an action that gets the installed body parse failure handler and
 -- applies it
 handleBodyParseFailure :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-handleBodyParseFailure e = getREH (view rehBodyParseFailed) >>= \handler -> handler (toErrorReport e)
+handleBodyParseFailure = useHandlerForReport (view rehBodyParseFailed)
 
 -- | get and use installed auth failed handler
 handleAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-handleAuthFailed e = getREH (view rehAuthFailed) >>= \handler -> handler (toErrorReport e)
+handleAuthFailed = useHandlerForReport (view rehAuthFailed)
 
 -- | get and use denied handler
 handleDenied :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
-handleDenied e = getREH (view rehDenied) >>= \handler -> handler (toErrorReport e)
+handleDenied = useHandlerForReport (view rehDenied)
+
+-- | get and use handler for caught exceptions.
+handleException :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
+handleException = useHandlerForReport (view rehException)
+
 
 -- | get a specific handler.
 --
 -- > getREH = (<$> getREHs)
 getREH :: MonadRespond m => (RequestErrorHandlers -> a) -> m a
 getREH = (<$> getREHs)
+
+-- * other response utilities.
+
+-- | a way to use Maybe values to produce 404s
+maybeNotFound :: (ReportableError e, MonadRespond m) => e -> (a -> m ResponseReceived) -> Maybe a -> m ResponseReceived
+maybeNotFound = maybe . respond . ResponseError notFound404  
+
+-- | catch Exceptions using MonadCatch, and use 'handleException' to
+-- respond with an error report.
+catchRespond :: (MonadCatch m, MonadRespond m, ReportableError r, Exception e) => (e -> r) -> m ResponseReceived -> m ResponseReceived
+catchRespond = handle . (handleException .)
