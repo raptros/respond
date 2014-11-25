@@ -240,5 +240,5 @@ newtype Natural = Natural Integer deriving (Eq, Show)
 
 instance PathPiece Natural where
     toPathPiece (Natural i) = T.pack $ show i 
-    fromPathPiece s = fromPathPiece s >>= \i -> mayWhen (Natural i) (i < 1)
+    fromPathPiece s = fromPathPiece s >>= \i -> mayWhen (Natural i) (i >= 1)
 
