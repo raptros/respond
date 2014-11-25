@@ -16,7 +16,6 @@ import Control.Monad.IO.Class (liftIO)
 import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
-import Data.Aeson
 
 -- * extracting the request body
 
@@ -24,36 +23,36 @@ import Data.Aeson
 getBodyLazy :: MonadRespond m => m LBS.ByteString
 getBodyLazy = getRequest >>= liftIO . lazyRequestBody
 
--- | gets you a function of the body, using lazy IO
-getBodyAsLazy :: MonadRespond m => (LBS.ByteString -> a) -> m a
-getBodyAsLazy = (<$> getBodyLazy)
+-- | gets the body as a lazy ByteString using /strict/ IO (see
+-- 'Network.Wai.strictRequestBody'
+getBodyStrict :: MonadRespond m => m LBS.ByteString
+getBodyStrict = getRequest >>= liftIO . strictRequestBody
 
--- ** as JSON
+-- ** extraction using FromBody
 
--- | parse the body as json, defer decoding
-parseJsonBody :: (FromJSON a, MonadRespond m) => m (Maybe a)
-parseJsonBody = getBodyAsLazy decode
+-- | use a FromBody instance to parse the body. uses 'getBodyLazy' to
+-- lazily load the body data.
+extractBodyLazy :: (ReportableError e, FromBody e a, MonadRespond m) => m (Either e a)
+extractBodyLazy = fromBody <$> getBodyLazy
 
--- | parse the body as json, decode immediately
-parseJsonBody' :: (FromJSON a, MonadRespond m) => m (Maybe a)
-parseJsonBody' = getBodyAsLazy decode'
+-- | uses a FromBody instance to parse the body. uses 'getBodyStrict' to
+-- load the body strictly.
+extractBodyStrict :: (ReportableError e, FromBody e a, MonadRespond m) => m (Either e a)
+extractBodyStrict = fromBody <$> getBodyStrict
 
--- | same as 'parseJsonBody' except wih an error string
-parseJsonBodyEither :: (FromJSON a, MonadRespond m) => m (Either String a)
-parseJsonBodyEither = getBodyAsLazy eitherDecode
-
--- | same as 'parseJsonBody'' except wih an error string
-parseJsonBodyEither' :: (FromJSON a, MonadRespond m) => m (Either String a)
-parseJsonBodyEither' = getBodyAsLazy eitherDecode'
-
--- ** fancy extraction
-
--- | use a FromBody instance to parse the body.
-extractFromBody :: (ReportableError e, FromBody e a, MonadRespond m) => m (Either e a)
-extractFromBody = getBodyAsLazy fromBody
-
+-- | extracts the body using 'extractBodyLazy'. runs the inner action only
+-- if the body could be loaded and parseda using the FromBody instance;
+-- otherwise responds with the reportable error by calling
+-- 'handleBodyParseFailure'.
 withRequiredBody :: (ReportableError e, FromBody e a, MonadRespond m) => (a -> m ResponseReceived) -> m ResponseReceived
-withRequiredBody action = extractFromBody >>= either handleBodyParseFailure action
+withRequiredBody action = extractBodyLazy >>= either handleBodyParseFailure action
+
+-- | extracts the body using 'extractBodyStrict'. runs the inner action only
+-- if the body could be loaded and parseda using the FromBody instance;
+-- otherwise responds with the reportable error by calling
+-- 'handleBodyParseFailure'.
+withRequiredBody' :: (ReportableError e, FromBody e a, MonadRespond m) => (a -> m ResponseReceived) -> m ResponseReceived
+withRequiredBody' action = extractBodyStrict >>= either handleBodyParseFailure action
 
 -- * authentication and authorization
 
@@ -81,10 +80,6 @@ authorize check inner = check >>= maybe inner handleDenied
 authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 authorizeE check inner = check >>= either handleDenied inner
 
--- | this is a stupid little trick.
-ifM :: Monad m => m Bool -> m a -> m a -> m a
-ifM cond yes no = cond >>= \a -> if a then yes else no 
-
 -- * headers
 findHeader :: MonadRespond m => HeaderName -> m (Maybe BS.ByteString)
-findHeader header = (lookup header) . requestHeaders <$> getRequest
+findHeader header = lookup header . requestHeaders <$> getRequest

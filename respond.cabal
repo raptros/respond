@@ -44,6 +44,7 @@ library
         monad-control == 0.3.*,
         data-default-class,
         exceptions >= 0.6 && < 0.7,
+        bifunctors >= 4.1 && <= 4.3,
         fast-logger == 2.*,
         transformers == 0.4.*,
         safe >= 0.3 && < 0.4,

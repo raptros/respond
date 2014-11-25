@@ -18,8 +18,9 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Sequence as S
 import Data.Aeson
 import Data.String (fromString)
+import Data.Bifunctor
 
-import Control.Lens (makeLenses, snoc, (%=), uses, (%~), _Left, _Right)
+import Control.Lens (makeLenses, snoc, (%=), uses)
 import Safe (headMay, tailSafe)
 
 -- * responding
@@ -131,5 +132,12 @@ class ReportableError e => FromBody e a | a -> e where
 newtype Json a = Json { getJson :: a }
 
 instance FromJSON a => FromBody JsonParseError (Json a) where
-    fromBody = (_Left %~ JsonParseError) . (_Right %~ Json) . eitherDecode
+    fromBody = bimap JsonParseError Json . eitherDecode
+
+-- | newtype for parsing from a json body. the 'FromBody instance uses the
+-- immediate 'eitherDecode'' parser.
+newtype JsonS a = JsonS { getJsonS :: a }
+
+instance FromJSON a => FromBody JsonParseError (JsonS a) where
+    fromBody = bimap JsonParseError JsonS . eitherDecode'
 
