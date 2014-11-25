@@ -33,6 +33,7 @@ library
         Web.Respond.Response
         Web.Respond.DefaultHandlers
         Web.Respond.Request
+        Web.Respond.Method
         Web.Respond.HListUtils
         Web.Respond.Path
         Web.Respond.DefaultServer

@@ -72,7 +72,7 @@ methodingExample = matchPath $
     pathEndOrSlash (matchMethod $
         onGET (respond $ OkJson $ object ["method" .= textGET]) <>
         onPOST (respond $ OkJson $ object ["method" .= textPOST])) <|>
-    pathWithMethod GET (
+    matchPathWithMethod GET (
         pathLastSeg "one" (respond $ OkJson $ object ["got" .= textOne]) <|>
         path (seg "two" </> (value :: PathExtractor1 Int)) (\i -> respond $ OkJson $ object ["got" .= textTwo, "v" .= i]))
 

@@ -27,7 +27,7 @@ import Network.HTTP.Types.Method
 import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
-import Web.Respond.Request
+import Web.Respond.Method
 import Web.Respond.HListUtils
 
 -- * matching paths to actions
@@ -64,14 +64,16 @@ instance Monad PathMatcher where
 matchPath :: MonadRespond m => PathMatcher (m ResponseReceived) -> m ResponseReceived
 matchPath pm = getPath >>= (fromMaybe handleUnmatchedPath . runPathMatcher pm)
 
+-- ** transforming path matchers
+
 -- | wrap the action within a path matcher with 'matchOnlyMethod'; this way
 -- all paths below this can be restricted to a single method properly. 
-pathWithMethod :: MonadRespond m => StdMethod -> PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
-pathWithMethod = fmap . matchOnlyMethod
+matchPathWithMethod :: MonadRespond m => StdMethod -> PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+matchPathWithMethod = fmap . matchOnlyMethod
 
 -- | 'pathWithMethod' GET
-pathWithGET :: MonadRespond m => PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
-pathWithGET = pathWithMethod GET
+matchPathWithGET :: MonadRespond m => PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+matchPathWithGET = matchPathWithMethod GET
 
 -- * extracting path elements
 
@@ -182,6 +184,18 @@ singleItemExtractor = singleSegExtractor . (fmap (hEnd . hBuild) .)
 value :: PathPiece a => PathExtractor1 a
 value = singleItemExtractor fromPathPiece
 
+-- *** extract while matching methods
+
+-- | path extraction matcher transformed with 'matchPath'
+pathMethod :: MonadRespond m => StdMethod -> PathExtractor (HList l) -> HListElim l (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+pathMethod m extractor = matchPathWithMethod m . path extractor
+
+-- | path extraction matcher with action wrapped so that it only matches
+-- GET method
+pathGET :: MonadRespond m => PathExtractor (HList l) -> HListElim l (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+pathGET = pathMethod GET
+
+
 -- * utilities
 
 -- | utility method for conditionally providing a value
@@ -226,5 +240,5 @@ newtype Natural = Natural Integer deriving (Eq, Show)
 
 instance PathPiece Natural where
     toPathPiece (Natural i) = T.pack $ show i 
-    fromPathPiece s = fromPathPiece s >>= \i -> (if i < 1 then Nothing else Just $ Natural i)
+    fromPathPiece s = fromPathPiece s >>= \i -> mayWhen (Natural i) (i < 1)
 
