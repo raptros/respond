@@ -54,12 +54,18 @@ matchMethod dispatcher = getRequest <&> (parseMethod . requestMethod) >>= either
 onMethod :: StdMethod -> a -> MethodMatcher a
 onMethod = (MethodMatcher .) . Map.singleton
 
+-- | shortcut for when you want to run an inner action for just one http method
+--
+-- > matchOnlyMethod m = matchMethod . onMethod m
+matchOnlyMethod :: MonadRespond m => StdMethod -> m ResponseReceived -> m ResponseReceived
+matchOnlyMethod m = matchMethod . onMethod m
+
+-- | shortcut for 'matchOnlyMethod' GET
+matchGET :: MonadRespond m => m ResponseReceived -> m ResponseReceived
+matchGET = matchOnlyMethod GET
+
 onGET :: a -> MethodMatcher a
 onGET = onMethod GET
-
--- | shortcut for 'matchMethod . onGET'
-matchGET :: MonadRespond m => m ResponseReceived -> m ResponseReceived
-matchGET = matchMethod . onGET
 
 onPOST :: a -> MethodMatcher a
 onPOST = onMethod POST

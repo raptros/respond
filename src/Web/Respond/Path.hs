@@ -22,10 +22,12 @@ import qualified Control.Monad.State as StateT
 import Control.Monad.Trans.Class
 import Data.HList
 import Web.PathPieces
+import Network.HTTP.Types.Method
 
 import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
+import Web.Respond.Request
 import Web.Respond.HListUtils
 
 -- * matching paths to actions
@@ -61,6 +63,15 @@ instance Monad PathMatcher where
 -- see 'handleUnmatchedPath'
 matchPath :: MonadRespond m => PathMatcher (m ResponseReceived) -> m ResponseReceived
 matchPath pm = getPath >>= (fromMaybe handleUnmatchedPath . runPathMatcher pm)
+
+-- | wrap the action within a path matcher with 'matchOnlyMethod'; this way
+-- all paths below this can be restricted to a single method properly. 
+pathWithMethod :: MonadRespond m => StdMethod -> PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+pathWithMethod = fmap . matchOnlyMethod
+
+-- | 'pathWithMethod' GET
+pathWithGET :: MonadRespond m => PathMatcher (m ResponseReceived) -> PathMatcher (m ResponseReceived)
+pathWithGET = pathWithMethod GET
 
 -- * extracting path elements
 
