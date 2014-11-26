@@ -112,6 +112,8 @@ path extractor f = PathMatcher $ uncurry (useNextPathState f) . pathExtract extr
 
 -- | an action that runs the action (HListElim l (m a)) with the new path
 -- consumer state if an extracted value is provided. 
+--
+-- this mainly exists for the use of 'path'.
 useNextPathState :: MonadRespond m => HListElim l (m a) -> Maybe (HList l) -> PathConsumer -> Maybe (m a)
 useNextPathState elim maybeExtraction nextPath = (usePath nextPath . hListUncurry elim) <$> maybeExtraction
 
