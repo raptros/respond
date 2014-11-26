@@ -17,9 +17,9 @@ import qualified Data.Text as T
 import qualified Data.Sequence as S
 import Safe (headMay)
 import Data.Maybe (fromMaybe)
-import qualified Control.Monad.State.Class as State
+import qualified Control.Monad.State.Class as MState
 import qualified Control.Monad.State as StateT
-import Control.Monad.Trans.Class
+import qualified Control.Monad.Trans.Maybe as MaybeT
 import Data.HList
 import Web.PathPieces
 import Network.HTTP.Types.Method
@@ -78,15 +78,15 @@ matchPathWithGET = matchPathWithMethod GET
 -- * extracting path elements
 
 -- | the path extractor matches the path and extracts values; it is useful
--- for building PathMatchers. it is built on both State and Maybe - if it
+-- for building PathMatchers. it is built on both MState and Maybe - if it
 -- succeeds, it can modify the state to represent the path it has consumed.
 newtype PathExtractor l = PathExtractor {
-    runPathExtractor :: StateT.StateT PathConsumer Maybe l
-} deriving (Functor, Applicative, Monad, Alternative, State.MonadState PathConsumer, MonadPlus)
+    runPathExtractor :: MaybeT.MaybeT (StateT.State PathConsumer) l
+} deriving (Functor, Applicative, Monad, Alternative, MState.MonadState PathConsumer, MonadPlus)
 
 -- | takes a Maybe and makes it into a path extractor
 asPathExtractor :: Maybe a -> PathExtractor a
-asPathExtractor = PathExtractor . lift
+asPathExtractor = maybe empty return
 
 -- | a path extractor that extracts nothing, just matches
 type PathExtractor0 = PathExtractor HList0
@@ -97,8 +97,8 @@ type PathExtractor1 a = PathExtractor (HList1 a)
 -- ** using path extractors
 
 -- | runs a 'PathExtractor' against a 'PathConsumer'.
-pathExtract :: PathExtractor a -> PathConsumer -> Maybe (a, PathConsumer)
-pathExtract extractor = StateT.runStateT (runPathExtractor extractor) 
+pathExtract :: PathExtractor a -> PathConsumer -> (Maybe a, PathConsumer)
+pathExtract = StateT.runState . MaybeT.runMaybeT . runPathExtractor
 
 -- | create a 'PathMatcher' by providing a path extractor and an action that
 -- consumes the extracted elements.
@@ -108,10 +108,12 @@ pathExtract extractor = StateT.runStateT (runPathExtractor extractor)
 --
 -- > path ((value :: PathExtractor1 String) </> seg "whatever" </> (value :: PathExtractor1 Integer)) $ \string integer -> -- some action
 path :: MonadRespond m => PathExtractor (HList l) -> HListElim l (m a) -> PathMatcher (m a)
-path extractor f = PathMatcher $ \p -> do
-    (v, p') <- pathExtract extractor p
-    let action = hListUncurry f v
-    return $ usePath p' action
+path extractor f = PathMatcher $ uncurry (useNextPathState f) . pathExtract extractor
+
+-- | an action that runs the action (HListElim l (m a)) with the new path
+-- consumer state if an extracted value is provided. 
+useNextPathState :: MonadRespond m => HListElim l (m a) -> Maybe (HList l) -> PathConsumer -> Maybe (m a)
+useNextPathState elim maybeExtraction nextPath = (usePath nextPath . hListUncurry elim) <$> maybeExtraction
 
 -- | a simple matcher for being at the end of the path.
 -- 
@@ -134,14 +136,14 @@ pathLastSeg s = path (seg s </> endOrSlash)
 -- | match only when the PathConsumer in the path state has no unconsumed
 -- elements.
 pathEnd :: PathExtractor0
-pathEnd = State.get >>= maybe (return HNil) (const empty) . pcGetNext
+pathEnd = MState.get >>= maybe (return HNil) (const empty) . pcGetNext
 
 -- | build a path matcher that runs an extractor function on a single
 -- element and then advances the path state if it matched. 
 singleSegExtractor :: (T.Text -> Maybe (HList a)) -> PathExtractor (HList a)
 singleSegExtractor extractor = do
-    res <- State.get >>= asPathExtractor . (pcGetNext >=> extractor)
-    State.modify pcConsumeNext 
+    res <- MState.get >>= asPathExtractor . (pcGetNext >=> extractor)
+    MState.modify pcConsumeNext 
     return res
 
 -- | build an extractor from a function that does not produce any real
