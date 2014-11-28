@@ -9,7 +9,6 @@ module Web.Respond.Response where
 
 import Control.Applicative ((<$>))
 import Network.Wai
-import Data.Aeson
 import qualified Data.ByteString as BS
 import Network.HTTP.Types.Status
 import Network.HTTP.Types.Header
@@ -18,65 +17,50 @@ import qualified Data.Text as T
 import Control.Lens (view)
 import Control.Monad (join)
 import Control.Monad.Catch
+import Data.Maybe (fromMaybe)
 
 import Web.Respond.Types
 import Web.Respond.Monad
 
--- * Response construction
 
--- | AsJson is a 'ToResponse' instance for sending JSON responses.
-data AsJson a =
-        -- | send a JSON response with a status and a set of headers to
-        -- include
-        AddHeaders Status ResponseHeaders a |
-        -- | send a JSON response with a status but leave the headers alone
-        DefaultHeaders Status a |
-        -- | send a 200 response with JSON and no added headers
-        OkJson a
+-- * headers
+findHeader :: MonadRespond m => HeaderName -> m (Maybe BS.ByteString)
+findHeader header = lookup header . requestHeaders <$> getRequest
 
-instance ToJSON a => ToResponse (AsJson a) where
-    toResponse (AddHeaders status hdrs a) = responseJson status hdrs a
-    toResponse (DefaultHeaders status a) = responseJson status [] a
-    toResponse (OkJson a) = responseJson ok200 [] a
+findHeaderDefault :: MonadRespond m => HeaderName -> BS.ByteString -> m BS.ByteString
+findHeaderDefault header defValue = fromMaybe defValue <$> findHeader header
 
--- | a 'ToResponse' instance that sends a status and headers with content
--- type set to json and no actual response body.
-data EmptyJson = EmptyJson Status ResponseHeaders
+-- * constructing responses
 
-instance ToResponse EmptyJson where
-    toResponse (EmptyJson status hdrs) = responseJson status hdrs (object [])
+-- | responding with an empty body means not having to worry about the
+-- Accept header.
+respondEmptyBody :: MonadRespond m => Status -> ResponseHeaders -> m ResponseReceived
+respondEmptyBody status headers = respond $ responseLBS status headers ""
 
--- | send a response with an empty body, content type json, and content
--- length 0.
-data EmptyBody = EmptyBody Status ResponseHeaders
+-- | respond that the request's accept header could not be satisfied
+respondUnacceptable :: MonadRespond m => m ResponseReceived
+respondUnacceptable = respondEmptyBody notAcceptable406 []
 
-instance ToResponse EmptyBody where
-    toResponse (EmptyBody status hdrs) = responseLBS status (headerCTJson : (hContentLength, "0") : hdrs) ""
+-- | respond by applying a 'ResponseBuilder'
+respondUsingBuilder :: MonadRespond m => Status -> ResponseHeaders -> ResponseBuilder -> m ResponseReceived
+respondUsingBuilder status headers builder = respond $ builder status headers
 
--- | use a ReportableError as a response; the response will be Json.
-data ResponseError e = ResponseError Status e
+-- | respond by using the ToResponseBody instance for the value and
+-- determining 
+respondWith :: (MonadRespond m, ToResponseBody a) => Status -> ResponseHeaders -> a -> m ResponseReceived
+respondWith status headers body = findHeaderDefault hAccept "*/*" >>= maybe respondUnacceptable (respondUsingBuilder status headers) . toResponseBody body
 
-instance ReportableError e => ToResponse (ResponseError e) where
-    toResponse (ResponseError status e) = responseJson status [] (toErrorReport e)
+-- | respond with no additional headers
+respondStdHeaders :: (MonadRespond m, ToResponseBody a) => Status -> a -> m ResponseReceived
+respondStdHeaders = flip respondWith []
 
--- ** definitions for building responses
+-- | respond with 200 Ok
+respondOk :: (MonadRespond m, ToResponseBody a) => a -> m ResponseReceived
+respondOk = respondStdHeaders ok200
 
--- | the bytestring "application/json"
-contentTypeJson :: BS.ByteString
-contentTypeJson = "application/json"
-
--- | make a Content-Type: header
-mkContentType :: BS.ByteString -> Header
-mkContentType = (hContentType, )
-
--- | "Content-Type: application/json"
-headerCTJson :: Header
-headerCTJson = mkContentType contentTypeJson
-
--- | build a response object with content type json and the value as a json
--- body
-responseJson :: ToJSON a => Status -> ResponseHeaders -> a -> Response
-responseJson s hs a = responseLBS s (headerCTJson : hs) (encode a)
+-- | respond by using a reportable error as the body
+respondReportableError :: (MonadRespond m, ReportableError e) => Status -> e -> m ResponseReceived
+respondReportableError status err = respondStdHeaders status $ toErrorReport err
 
 -- * use the RequestErrorHandlers
 
@@ -97,7 +81,6 @@ handlePathParseFailed parts = getREH (view rehPathParseFailed) >>= \handler -> h
 -- | generic handler-getter for things that use ErrorReports
 useHandlerForReport :: (MonadRespond m, ReportableError e) => (RequestErrorHandlers -> ErrorReport -> m ResponseReceived) -> e -> m ResponseReceived
 useHandlerForReport getter e = getREH getter >>= \handler -> handler (toErrorReport e)
-
 
 -- | an action that gets the installed body parse failure handler and
 -- applies it
@@ -127,7 +110,7 @@ getREH = (<$> getREHs)
 
 -- | a way to use Maybe values to produce 404s
 maybeNotFound :: (ReportableError e, MonadRespond m) => e -> (a -> m ResponseReceived) -> Maybe a -> m ResponseReceived
-maybeNotFound = maybe . respond . ResponseError notFound404  
+maybeNotFound = maybe . respondReportableError notFound404
 
 -- | catch Exceptions using MonadCatch, and use 'handleException' to
 -- respond with an error report.

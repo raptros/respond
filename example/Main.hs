@@ -28,26 +28,26 @@ exampleApi = matchPath $
     path (seg "methoding") methodingExample
     where
     numHandler :: Integer -> T.Text -> Example ResponseReceived
-    numHandler num t = respond $ OkJson $ object ["text" .= t, "num" .= num]
+    numHandler num t = respondOk $ object ["text" .= t, "num" .= num]
 
 assembleHandler :: Example ResponseReceived
 assembleHandler = matchPath $
-    path endOrSlash (respond $ DefaultHeaders notImplemented501 (object ["awaiting" .= ("stray kitten" :: T.Text)])) <|>
+    path endOrSlash (respondStdHeaders notImplemented501 (object ["awaiting" .= ("stray kitten" :: T.Text)])) <|>
     path value firstHandler
 
 apiRoot :: Example ResponseReceived
 apiRoot = matchMethod $
-    onGET (respond $ OkJson (object ["location" .= ("here" :: T.Text)])) <>
-    onPUT (respond $ OkJson (object ["location" .= ("there" :: T.Text)])) <>
+    onGET (respondOk (object ["location" .= ("here" :: T.Text)])) <>
+    onPUT (respondOk (object ["location" .= ("there" :: T.Text)])) <>
     onPOST (withRequiredBody $ showPostedValue . getJson)
     where
     showPostedValue :: Value -> Example ResponseReceived
-    showPostedValue v = respond $ OkJson ["location" .= ("cold" :: T.Text), "recvd" .= v]
+    showPostedValue v = respondOk (object ["location" .= ("cold" :: T.Text), "recvd" .= v])
 
 firstHandler :: T.Text -> Example ResponseReceived
 firstHandler p = do 
     ps <- getUnconsumedPath
-    respond $ DefaultHeaders notImplemented501 (object ["head" .= p, "tail" .= ps])
+    respondStdHeaders notImplemented501 (object ["head" .= p, "tail" .= ps])
 
 errorExample :: Example ResponseReceived
 errorExample = catchRespond displayError $ matchMethod $
@@ -70,9 +70,9 @@ textTwo = "two"
 methodingExample :: Example ResponseReceived
 methodingExample = matchPath $
     pathEndOrSlash (matchMethod $
-        onGET (respond $ OkJson $ object ["method" .= textGET]) <>
-        onPOST (respond $ OkJson $ object ["method" .= textPOST])) <|>
+        onGET (respondOk $ object ["method" .= textGET]) <>
+        onPOST (respondOk $ object ["method" .= textPOST])) <|>
     matchPathWithMethod GET (
-        pathLastSeg "one" (respond $ OkJson $ object ["got" .= textOne]) <|>
-        path (seg "two" </> (value :: PathExtractor1 Int)) (\i -> respond $ OkJson $ object ["got" .= textTwo, "v" .= i]))
+        pathLastSeg "one" (respondOk $ object ["got" .= textOne]) <|>
+        path (seg "two" </> (value :: PathExtractor1 Int)) (\i -> respondOk $ object ["got" .= textTwo, "v" .= i]))
 

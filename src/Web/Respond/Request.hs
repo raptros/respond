@@ -6,10 +6,8 @@ contains various matching utilities
 module Web.Respond.Request where
 
 import Network.Wai
-import Network.HTTP.Types.Header
 import qualified Data.ByteString.Lazy as LBS
 import Control.Applicative ((<$>))
-import qualified Data.ByteString as BS
 
 import Control.Monad.IO.Class (liftIO)
 
@@ -79,7 +77,3 @@ authorize check inner = check >>= maybe inner handleDenied
 -- if it results in Right, run the inner action using the produced value
 authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 authorizeE check inner = check >>= either handleDenied inner
-
--- * headers
-findHeader :: MonadRespond m => HeaderName -> m (Maybe BS.ByteString)
-findHeader header = lookup header . requestHeaders <$> getRequest

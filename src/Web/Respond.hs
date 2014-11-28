@@ -4,26 +4,17 @@ Description: main module for library. exports everything.
 Re-exports all the modules under Web.Respond
 -}
 module Web.Respond (
-                  -- * the modules
-                  module Web.Respond.Types,
-                  module Web.Respond.Monad,
-                  module Web.Respond.Response,
-                  module Web.Respond.Request,
-                  module Web.Respond.Method,
-                  module Web.Respond.Path,
-                  module Web.Respond.DefaultHandlers,
-                  module Web.Respond.DefaultServer,
-                  module Web.Respond.Run,
+                    module X
                   ) where
 
 
-import Web.Respond.Types
-import Web.Respond.Monad
-import Web.Respond.Response
-import Web.Respond.DefaultHandlers
-import Web.Respond.Request
-import Web.Respond.Method
-import Web.Respond.Path
-import Web.Respond.DefaultServer
-import Web.Respond.Run
+import Web.Respond.Types as X
+import Web.Respond.Monad as X
+import Web.Respond.Response as X
+import Web.Respond.DefaultHandlers as X
+import Web.Respond.Request as X
+import Web.Respond.Method as X
+import Web.Respond.Path as X
+import Web.Respond.DefaultServer as X
+import Web.Respond.Run as X
 

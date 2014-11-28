@@ -1,5 +1,5 @@
 name:                respond
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            a simple Haskell web service framework (barely) that sits on top of WAI
 description:         a simple Haskell web service framework (barely) that sits on top of WAI
 homepage:            http://github.com/raptros/respond
@@ -29,6 +29,11 @@ library
     exposed-modules:
         Web.Respond
         Web.Respond.Types
+        Web.Respond.Types.Path
+        Web.Respond.Types.Response
+        Web.Respond.Types.Request
+        Web.Respond.Types.Errors
+        Web.Respond.Types.Json
         Web.Respond.Monad
         Web.Respond.Response
         Web.Respond.DefaultHandlers
@@ -47,6 +52,7 @@ library
         bifunctors >= 4.1 && <= 4.3,
         fast-logger == 2.*,
         transformers == 0.4.*,
+        http-media == 0.4.*,
         safe >= 0.3 && < 0.4,
         containers == 0.5.5.*,
         text >= 1.2 && < 1.3,

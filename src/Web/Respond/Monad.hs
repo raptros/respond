@@ -55,7 +55,7 @@ import Web.Respond.Types
 class (Functor m, MonadIO m) => MonadRespond m where
     -- | perform the WAI application respond action (after converting the
     -- value to a response)
-    respond :: ToResponse v => v -> m ResponseReceived
+    respond :: Response -> m ResponseReceived
     -- | get out the request.
     getRequest :: m Request
     -- | get the 'RequestErrorHandlers'.
@@ -124,7 +124,7 @@ newtype RespondT m a = RespondT {
 } deriving (Functor, Applicative, Monad, MonadReader RespondData)
 
 instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
-    respond v = view responder >>= \r -> liftIO . r . toResponse $ v
+    respond v = view responder >>= \r -> liftIO . r $ v
     getRequest = view request
     getREHs = view rehs
     withREHs handlers = local (rehs %~ handlers)
