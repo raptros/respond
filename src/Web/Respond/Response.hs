@@ -65,11 +65,7 @@ respondStdHeaders = flip respondWith []
 respondOk :: (MonadRespond m, ToResponseBody a) => a -> m ResponseReceived
 respondOk = respondStdHeaders ok200
 
--- | respond by using a reportable error as the body
---respondReportableError :: (MonadRespond m, ReportableError e) => Status -> e -> m ResponseReceived
---respondReportableError status = respondStdHeaders status . toErrorReport 
-
--- | respond using the new ReportableError2 class
+-- | respond using a ReportableError to generate the response body.
 respondReportError :: (MonadRespond m, ReportableError e) => Status -> ResponseHeaders -> e -> m ResponseReceived
 respondReportError status headers err = getAcceptHeader >>= respondUsingBody status headers . reportError status err
 
