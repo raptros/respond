@@ -26,7 +26,6 @@ module Web.Respond.Monad (
                          -- ** Getters for each handler
                          rehUnsupportedMethod, 
                          rehUnmatchedPath, 
-                         rehPathParseFailed,
                          rehBodyParseFailed,
                          rehAuthFailed,
                          rehDenied,
@@ -36,7 +35,6 @@ module Web.Respond.Monad (
 import Control.Applicative
 import Network.Wai
 import Network.HTTP.Types.Method
-import qualified Data.Text as T
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, mapReaderT)
 import Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import Control.Monad.Trans.Except (ExceptT, mapExceptT)
@@ -55,7 +53,7 @@ import Web.Respond.Types
 class (Functor m, MonadIO m) => MonadRespond m where
     -- | perform the WAI application respond action (after converting the
     -- value to a response)
-    respond :: ToResponse v => v -> m ResponseReceived
+    respond :: Response -> m ResponseReceived
     -- | get out the request.
     getRequest :: m Request
     -- | get the 'RequestErrorHandlers'.
@@ -92,16 +90,14 @@ data RequestErrorHandlers = RequestErrorHandlers {
     _rehUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived,
     -- | what to do if the request path has no matches
     _rehUnmatchedPath :: MonadRespond m => m ResponseReceived,
-    -- | what to do if components of the path can't be parsed
-    _rehPathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived,
     -- | what to do if the body failed to parse
-    _rehBodyParseFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehBodyParseFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authentication fails
-    _rehAuthFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authorization fails
-    _rehDenied :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehDenied :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when an exception has been caught
-    _rehException :: MonadRespond m => ErrorReport -> m ResponseReceived
+    _rehException :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers
@@ -124,7 +120,7 @@ newtype RespondT m a = RespondT {
 } deriving (Functor, Applicative, Monad, MonadReader RespondData)
 
 instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
-    respond v = view responder >>= \r -> liftIO . r . toResponse $ v
+    respond v = view responder >>= \r -> liftIO . r $ v
     getRequest = view request
     getREHs = view rehs
     withREHs handlers = local (rehs %~ handlers)

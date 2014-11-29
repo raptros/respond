@@ -3,15 +3,16 @@ Description: helpers for matching requests
 
 contains various matching utilities
 -}
+{-# LANGUAGE TupleSections #-}
 module Web.Respond.Request where
 
 import Network.Wai
-import Network.HTTP.Types.Header
 import qualified Data.ByteString.Lazy as LBS
 import Control.Applicative ((<$>))
-import qualified Data.ByteString as BS
 
 import Control.Monad.IO.Class (liftIO)
+import qualified Network.HTTP.Media as Media
+import Data.Maybe (fromMaybe)
 
 import Web.Respond.Types
 import Web.Respond.Monad
@@ -80,6 +81,16 @@ authorize check inner = check >>= maybe inner handleDenied
 authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 authorizeE check inner = check >>= either handleDenied inner
 
--- * headers
-findHeader :: MonadRespond m => HeaderName -> m (Maybe BS.ByteString)
-findHeader header = lookup header . requestHeaders <$> getRequest
+-- * content negotiation
+
+-- | selects action by accept header
+routeAccept :: MonadRespond m 
+            => m a -- ^ default action - do this if nothing matches
+            -> [(Media.MediaType, m a)] -- ^ actions to perform for each accepted media type
+            -> m a -- ^ chosen action
+routeAccept def mapped = getAcceptHeader >>= fromMaybe def . Media.mapAcceptMedia mapped
+
+-- | defends the inner routes by first checking the Accept header and
+-- failing if it cannot accept any media type in the list
+checkAccepts :: MonadRespond m => [Media.MediaType] -> m ResponseReceived -> m ResponseReceived
+checkAccepts list action = getAcceptHeader >>= maybe respondUnacceptable (const action) . Media.matchAccept list
