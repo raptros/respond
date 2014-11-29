@@ -10,6 +10,8 @@ import qualified Data.Text as T
 
 import Control.Monad.Trans.State
 import qualified Data.Sequence as S
+import Data.Foldable (toList)
+import Data.Monoid ((<>))
 
 import Control.Lens (makeLenses, snoc, (%=), uses)
 import Safe (headMay, tailSafe)
@@ -41,3 +43,5 @@ pcConsumeNext = execState $ do
     pcConsumed %= maybe id (flip snoc) next
     pcUnconsumed %= tailSafe
 
+getFullPath :: PathConsumer -> [T.Text]
+getFullPath pc = toList (_pcConsumed pc) <> _pcUnconsumed pc

@@ -13,7 +13,7 @@ import qualified Data.ByteString as BS
 import Network.HTTP.Types.Status
 import Network.HTTP.Types.Header
 import Network.HTTP.Types.Method
-import qualified Data.Text as T
+--import qualified Data.Text as T
 import Control.Lens (view)
 import Control.Monad (join)
 import Control.Monad.Catch
@@ -29,6 +29,11 @@ findHeader header = lookup header . requestHeaders <$> getRequest
 
 findHeaderDefault :: MonadRespond m => HeaderName -> BS.ByteString -> m BS.ByteString
 findHeaderDefault header defValue = fromMaybe defValue <$> findHeader header
+
+-- | get the value of the Accept header, falling back to "*/*" if it was
+-- not sent in the request
+getAcceptHeader :: MonadRespond m => m BS.ByteString
+getAcceptHeader = findHeaderDefault hAccept "*/*"
 
 -- * constructing responses
 
@@ -48,7 +53,7 @@ respondUsingBody status headers body = respond $ mkResponseForBody status header
 -- | respond by using the ToResponseBody instance for the value and
 -- determining 
 respondWith :: (MonadRespond m, ToResponseBody a) => Status -> ResponseHeaders -> a -> m ResponseReceived
-respondWith status headers body = findHeaderDefault hAccept "*/*" >>= maybe respondUnacceptable respond . mkResponse status headers body
+respondWith status headers body = getAcceptHeader >>= maybe respondUnacceptable respond . mkResponse status headers body
 
 --mkResponse :: ToResponseBody a => Status -> ResponseHeaders -> a -> BS.ByteString -> Maybe Response
 
@@ -61,28 +66,37 @@ respondOk :: (MonadRespond m, ToResponseBody a) => a -> m ResponseReceived
 respondOk = respondStdHeaders ok200
 
 -- | respond by using a reportable error as the body
-respondReportableError :: (MonadRespond m, ReportableError e) => Status -> e -> m ResponseReceived
-respondReportableError status err = respondStdHeaders status $ toErrorReport err
+--respondReportableError :: (MonadRespond m, ReportableError e) => Status -> e -> m ResponseReceived
+--respondReportableError status = respondStdHeaders status . toErrorReport 
+
+-- | respond using the new ReportableError2 class
+respondReportError :: (MonadRespond m, ReportableError e) => Status -> ResponseHeaders -> e -> m ResponseReceived
+respondReportError status headers err = getAcceptHeader >>= respondUsingBody status headers . reportError status err
 
 -- * use the RequestErrorHandlers
 
 -- | an action that gets the currently installed unsupported method handler
 -- and applies it to the arguments
 handleUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived
-handleUnsupportedMethod supported unsupported = getREH (view rehUnsupportedMethod) >>= \handler -> handler supported unsupported
+handleUnsupportedMethod supported unsupported = do
+    handler <- getREH (view rehUnsupportedMethod)
+    handler supported unsupported
 
 -- | an action that gets the installed unmatched path handler and uses it
 handleUnmatchedPath :: MonadRespond m => m ResponseReceived
 handleUnmatchedPath = join (getREH (view rehUnmatchedPath))
 
--- | an action that gets the installed path parse failed handler and
--- applies it
-handlePathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived
-handlePathParseFailed parts = getREH (view rehPathParseFailed) >>= \handler -> handler parts
-
 -- | generic handler-getter for things that use ErrorReports
-useHandlerForReport :: (MonadRespond m, ReportableError e) => (RequestErrorHandlers -> ErrorReport -> m ResponseReceived) -> e -> m ResponseReceived
-useHandlerForReport getter e = getREH getter >>= \handler -> handler (toErrorReport e)
+useHandlerForReport :: (MonadRespond m, ReportableError e) 
+                    => (RequestErrorHandlers -> e -> m ResponseReceived) 
+                    -- ^ a handler-getter that gets a handler that takes
+                    -- an error report
+                    -> e 
+                    -- ^ the error
+                    -> m ResponseReceived
+useHandlerForReport getter e = do
+    h <- getREH getter 
+    h e
 
 -- | an action that gets the installed body parse failure handler and
 -- applies it
@@ -112,7 +126,7 @@ getREH = (<$> getREHs)
 
 -- | a way to use Maybe values to produce 404s
 maybeNotFound :: (ReportableError e, MonadRespond m) => e -> (a -> m ResponseReceived) -> Maybe a -> m ResponseReceived
-maybeNotFound = maybe . respondReportableError notFound404
+maybeNotFound = maybe . respondReportError notFound404 []
 
 -- | catch Exceptions using MonadCatch, and use 'handleException' to
 -- respond with an error report.

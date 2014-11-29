@@ -25,7 +25,6 @@ defaultRequestErrorHandlers :: RequestErrorHandlers
 defaultRequestErrorHandlers = RequestErrorHandlers {
     _rehUnsupportedMethod = defaultUnsupportedMethodHandler,
     _rehUnmatchedPath = defaultUnmatchedPathHandler,
-    _rehPathParseFailed = defaultPathParseFailedHandler,
     _rehBodyParseFailed = defaultBodyParseFailureHandler,
     _rehAuthFailed = defaultAuthFailedHandler,
     _rehDenied = defaultDeniedHandler,
@@ -42,22 +41,18 @@ defaultUnsupportedMethodHandler allowed = const $ respondEmptyBody methodNotAllo
 defaultUnmatchedPathHandler :: MonadRespond m => m ResponseReceived
 defaultUnmatchedPathHandler = respondEmptyBody notFound404 []
 
--- | respond with status 400 and the list of bad elements in the path
-defaultPathParseFailedHandler :: MonadRespond m => [T.Text] -> m ResponseReceived
-defaultPathParseFailedHandler failedOn = respondStdHeaders badRequest400 $ errorReportWithDetails "parse_error" failedOn
-
 -- | respond with status 400 and a message about the body parse failure
-defaultBodyParseFailureHandler :: MonadRespond m => ErrorReport -> m ResponseReceived
-defaultBodyParseFailureHandler = respondStdHeaders badRequest400
+defaultBodyParseFailureHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultBodyParseFailureHandler = respondReportError badRequest400 []
 
 -- | respond with 401
-defaultAuthFailedHandler :: MonadRespond m => ErrorReport -> m ResponseReceived
-defaultAuthFailedHandler = respondStdHeaders unauthorized401
+defaultAuthFailedHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultAuthFailedHandler = respondReportError unauthorized401 []
 
 -- | respond with 403
-defaultDeniedHandler :: MonadRespond m => ErrorReport -> m ResponseReceived
-defaultDeniedHandler = respondStdHeaders forbidden403 
+defaultDeniedHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultDeniedHandler = respondReportError forbidden403 []
 
 -- | respond with 500
-defaultExceptionHandler :: MonadRespond m => ErrorReport -> m ResponseReceived
-defaultExceptionHandler = respondStdHeaders internalServerError500
+defaultExceptionHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultExceptionHandler = respondReportError internalServerError500 []

@@ -26,7 +26,6 @@ module Web.Respond.Monad (
                          -- ** Getters for each handler
                          rehUnsupportedMethod, 
                          rehUnmatchedPath, 
-                         rehPathParseFailed,
                          rehBodyParseFailed,
                          rehAuthFailed,
                          rehDenied,
@@ -36,7 +35,6 @@ module Web.Respond.Monad (
 import Control.Applicative
 import Network.Wai
 import Network.HTTP.Types.Method
-import qualified Data.Text as T
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, mapReaderT)
 import Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import Control.Monad.Trans.Except (ExceptT, mapExceptT)
@@ -92,16 +90,14 @@ data RequestErrorHandlers = RequestErrorHandlers {
     _rehUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived,
     -- | what to do if the request path has no matches
     _rehUnmatchedPath :: MonadRespond m => m ResponseReceived,
-    -- | what to do if components of the path can't be parsed
-    _rehPathParseFailed :: MonadRespond m => [T.Text] -> m ResponseReceived,
     -- | what to do if the body failed to parse
-    _rehBodyParseFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehBodyParseFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authentication fails
-    _rehAuthFailed :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authorization fails
-    _rehDenied :: MonadRespond m => ErrorReport -> m ResponseReceived,
+    _rehDenied :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when an exception has been caught
-    _rehException :: MonadRespond m => ErrorReport -> m ResponseReceived
+    _rehException :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
 }
 
 makeLenses ''RequestErrorHandlers

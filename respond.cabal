@@ -71,6 +71,7 @@ library
         safe >= 0.3 && < 0.4,
         containers == 0.5.5.*,
         text >= 1.2 && < 1.3,
+        formatting >= 5.0 && < 6.0,
         bytestring >= 0.10 && < 0.11,
         monad-logger >= 0.3.8 && < 0.4,
         wai >= 3.0 && < 4.0,

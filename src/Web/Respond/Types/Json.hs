@@ -9,22 +9,18 @@ import Web.Respond.Types.Response
 import Web.Respond.Types.Errors
 import Web.Respond.Types.Request
 
--- | wraps Aeson parse failure messages.
---
--- the 'ReportableError' instance uses "parse_failed" as the reason and the
--- error string from Aeson as the message.
-newtype JsonParseError = JsonParseError String
-
-instance ReportableError JsonParseError where
-    toErrorReport (JsonParseError msg) = errorReportWithMessage "parse_failed" (fromString msg)
+-- | convert a parse failure string message into an 'ErrorReport'; this
+-- gets used to implement 'FromBody' for 'Json' and 'JsonS'
+reportJsonParseError :: String -> ErrorReport
+reportJsonParseError msg = errorReportWithMessage "parse_failed" (fromString msg)
 
 -- | newtype for things that should be encoded as or parsed as Json.
 -- 
 -- the FromBody instance uses 'Data.Aeson.eitherDecode' - the lazy version.
 newtype Json a = Json { getJson :: a }
 
-instance FromJSON a => FromBody JsonParseError (Json a) where
-    fromBody = bimap JsonParseError Json . eitherDecode
+instance FromJSON a => FromBody ErrorReport (Json a) where
+    fromBody = bimap reportJsonParseError Json . eitherDecode
 
 instance ToJSON a => ToResponseBody (Json a) where
     toResponseBody = matchAcceptJson . getJson
@@ -35,8 +31,8 @@ instance ToJSON a => ToResponseBody (Json a) where
 -- parser.
 newtype JsonS a = JsonS { getJsonS :: a }
 
-instance FromJSON a => FromBody JsonParseError (JsonS a) where
-    fromBody = bimap JsonParseError JsonS . eitherDecode'
+instance FromJSON a => FromBody ErrorReport (JsonS a) where
+    fromBody = bimap reportJsonParseError JsonS . eitherDecode'
 
 instance ToJSON a => ToResponseBody (JsonS a) where
     toResponseBody = matchAcceptJson . getJsonS
