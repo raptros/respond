@@ -41,14 +41,16 @@ respondEmptyBody status headers = respond $ responseLBS status headers ""
 respondUnacceptable :: MonadRespond m => m ResponseReceived
 respondUnacceptable = respondEmptyBody notAcceptable406 []
 
--- | respond by applying a 'ResponseBuilder'
-respondUsingBuilder :: MonadRespond m => Status -> ResponseHeaders -> ResponseBuilder -> m ResponseReceived
-respondUsingBuilder status headers builder = respond $ builder status headers
+-- | respond by getting the information from a 'ResponseBody'
+respondUsingBody :: MonadRespond m => Status -> ResponseHeaders -> ResponseBody -> m ResponseReceived
+respondUsingBody status headers body = respond $ mkResponseForBody status headers body
 
 -- | respond by using the ToResponseBody instance for the value and
 -- determining 
 respondWith :: (MonadRespond m, ToResponseBody a) => Status -> ResponseHeaders -> a -> m ResponseReceived
-respondWith status headers body = findHeaderDefault hAccept "*/*" >>= maybe respondUnacceptable (respondUsingBuilder status headers) . toResponseBody body
+respondWith status headers body = findHeaderDefault hAccept "*/*" >>= maybe respondUnacceptable respond . mkResponse status headers body
+
+--mkResponse :: ToResponseBody a => Status -> ResponseHeaders -> a -> BS.ByteString -> Maybe Response
 
 -- | respond with no additional headers
 respondStdHeaders :: (MonadRespond m, ToResponseBody a) => Status -> a -> m ResponseReceived

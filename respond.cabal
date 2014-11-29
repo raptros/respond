@@ -1,17 +1,32 @@
-name:                respond
-version:             0.2.0.0
-synopsis:            a simple Haskell web service framework (barely) that sits on top of WAI
-description:         a simple Haskell web service framework (barely) that sits on top of WAI
-homepage:            http://github.com/raptros/respond
-license:             BSD3
-license-file:        LICENSE
-author:              aidan coyne
-maintainer:          coynea90@gmail.com
-copyright:           2014, aidan coyne
-category:            Web
-build-type:          Simple
-extra-source-files:  README.md
-cabal-version:       >=1.10
+name:
+    respond
+version:
+    0.2.0.0
+homepage:
+    http://github.com/raptros/respond
+license:
+    BSD3
+license-file:
+    LICENSE
+author:
+    aidan coyne
+maintainer:
+    coynea90@gmail.com
+copyright:
+    2014, aidan coyne
+category:
+    Web
+build-type:
+    Simple
+extra-source-files:
+    README.md
+cabal-version:
+    >=1.10
+synopsis:
+    a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses
+description:
+    a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses. 
+    see the source repository for a simple example application.
 
 source-repository head
     type: git
