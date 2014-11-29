@@ -69,6 +69,10 @@ respondOk = respondStdHeaders ok200
 respondReportError :: (MonadRespond m, ReportableError e) => Status -> ResponseHeaders -> e -> m ResponseReceived
 respondReportError status headers err = getAcceptHeader >>= respondUsingBody status headers . reportError status err
 
+-- | respond that something was not found
+respondNotFound :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+respondNotFound = respondReportError notFound404 []
+
 -- * use the RequestErrorHandlers
 
 -- | an action that gets the currently installed unsupported method handler

@@ -36,3 +36,4 @@ instance FromJSON a => FromBody ErrorReport (JsonS a) where
 
 instance ToJSON a => ToResponseBody (JsonS a) where
     toResponseBody = matchAcceptJson . getJsonS
+
