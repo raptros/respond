@@ -11,9 +11,18 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Builder as TL
+import qualified Data.Text.Lazy.Builder as TLB
+import qualified Data.Scientific as Sci
+import Data.Int (Int64)
 import Formatting
-import Control.Applicative ((<$>), (<*>))
+import Data.Foldable (fold, foldMap)
+import Control.Applicative ((<$>), (<*>), pure)
+import Data.Monoid (mappend, (<>))
+import Data.Vector ()
+import Data.Bool (bool)
+import qualified Data.HashMap.Strict as HM
+import qualified Data.List as Li
+--import Control.Lens (lens, (%~))
 
 import Network.HTTP.Types.Status
 --import qualified Network.HTTP.Media as Media
@@ -67,7 +76,7 @@ statusFormat = later (bprint (int % now " " % stext) <$> statusCode <*> T.decode
 -- | i am not sure what the type means, but you pass this a default string
 -- and a format for a thing, and it gives you a formatter for maybe that
 -- thing.
-maybeFormat :: forall m r a. m -> Holey TL.Builder TL.Builder (a -> m) -> Holey m r (Maybe a -> r)
+maybeFormat :: forall m r a. m -> Holey TLB.Builder TLB.Builder (a -> m) -> Holey m r (Maybe a -> r)
 maybeFormat x f = later (maybe x (bprint f))
 
 -- *** format-builders
@@ -79,8 +88,47 @@ errorReportFormat :: Format T.Text -- ^ format for the reason
                   -> Format ErrorReport
 errorReportFormat reasonFmt messageFmt erdFmt = later (bprint (reasonFmt % maybeFormat "" messageFmt % maybeFormat "" erdFmt ) <$> erReason <*> erMessage <*> erDetails) 
 
+boolFormat :: Format Bool
+boolFormat = later $ bprint . bool "false" "true"
+
+valueFold :: a -> (Bool -> a) -> (Sci.Scientific -> a) -> (T.Text -> a) -> (Array -> a) -> (Object -> a) -> Value -> a
+valueFold f _ _ _ _ _ Null = f
+valueFold _ f _ _ _ _ (Bool b) = f b
+valueFold _ _ f _ _ _ (Number n) = f n
+valueFold _ _ _ f _ _ (String s) = f s
+valueFold _ _ _ _ f _ (Array a) = f a
+valueFold _ _ _ _ _ f (Object o) = f o
+
+data JContainer = JObj | JArr | Root
+
 -- *** formatters for plain text
 
+mkIndent :: Int64 -> TLB.Builder
+mkIndent = TLB.fromLazyText . flip TL.replicate " "
+
+newlineIndent :: Int64 -> TLB.Builder
+newlineIndent indent = TLB.singleton '\n' <> mkIndent indent
+
+plaintextValueFormat :: JContainer -> Int64 -> Format Value
+plaintextValueFormat container indent = later $ valueFold (bprint "null") (bprint boolFormat) (bprint sci) (bprint stext) (bprint $ plaintextArrFormat container indent) (bprint $ plaintextObjectFormat container indent)
+
+plaintextArrFormat :: JContainer -> Int64 -> Format Array
+plaintextArrFormat _ indent = later $ foldMap $ bprint ("\n" % now (mkIndent indent) % "- " % plaintextValueFormat JArr (indent + 2))
+
+objectItemPlaintextFormat :: Int64 -> Format (T.Text, Value)
+objectItemPlaintextFormat indent = later . uncurry . bprint $ stext % ": " % plaintextValueFormat JObj indent 
+
+formatObjectPlaintext :: JContainer -> Int64 -> Object -> TLB.Builder
+formatObjectPlaintext container indent = bool <$> mkObj <*> pure (bprint "{}") <*> HM.null
+    where
+    mkObj = fold . separate container . preppedItems
+    separate Root = Li.intersperse (TLB.fromLazyText "\n") . fmap (mappend (mkIndent indent))
+    separate JArr = Li.intersperse (newlineIndent indent)
+    separate JObj = fmap (mappend (newlineIndent indent))
+    preppedItems = fmap (bprint $ objectItemPlaintextFormat (indent + 2)) . HM.toList
+
+plaintextObjectFormat :: JContainer -> Int64 -> Format Object
+plaintextObjectFormat container indent = later $ formatObjectPlaintext container indent
 
 -- | renders error report as plain text
 renderPlainTextErrorReport :: Status -> ErrorReport -> TL.Text
