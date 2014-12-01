@@ -13,7 +13,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TLB
-import qualified Data.Scientific as Sci
 import Data.Int (Int64)
 import Formatting
 import Control.Applicative ((<$>), (<*>))
@@ -88,16 +87,6 @@ errorReportFormat reasonFmt messageFmt erdFmt = later (bprint (reasonFmt % maybe
 boolFormat :: Format Bool
 boolFormat = later $ bprint . bool "false" "true"
 
-valueFold :: a -> (Bool -> a) -> (Sci.Scientific -> a) -> (T.Text -> a) -> (Array -> a) -> (Object -> a) -> Value -> a
-valueFold f _ _ _ _ _ Null = f
-valueFold _ f _ _ _ _ (Bool b) = f b
-valueFold _ _ f _ _ _ (Number n) = f n
-valueFold _ _ _ f _ _ (String s) = f s
-valueFold _ _ _ _ f _ (Array a) = f a
-valueFold _ _ _ _ _ f (Object o) = f o
-
-data JContainer = JObj | JArr | JRoot
-
 mkIndent :: Int64 -> TLB.Builder
 mkIndent = TLB.fromLazyText . flip TL.replicate " "
 
@@ -106,13 +95,21 @@ simpleJsonValue :: Format Value
 simpleJsonValue = later encodeToTextBuilder
 
 -- *** formatters for plain text
+
+-- | the plaintext error report format
+--
+-- tries to be somewhat yaml
+plaintextErrorReportFormat :: forall b. Holey TLB.Builder b (Status -> ErrorReport -> b)
+plaintextErrorReportFormat = statusFormat % "---\n" % errorReportFormat ("reason: " % stext % "\n") ("message: " % stext % "\n") ("details: " % simpleJsonValue % "\n")
+
 -- | renders error report as plain text
 renderPlainTextErrorReport :: Status -> ErrorReport -> TL.Text
-renderPlainTextErrorReport = format $ statusFormat % "---\n" % errorReportFormat ("reason: " % stext % "\n") ("message: " % stext % "\n") ("details: " % simpleJsonValue % "\n")
+renderPlainTextErrorReport = format plaintextErrorReportFormat
 
 pFormat :: Buildable a => Int64 -> Format a
 pFormat indent = now (mkIndent indent) % "<p>" % build % "</p>\n"
 
+-- | the html format
 htmlErrorReportFormat :: forall b. Holey TLB.Builder b (Status -> ErrorReport -> b)
 htmlErrorReportFormat = "<!DOCTYPE html>\n" %
     "<html>\n" % 
@@ -131,7 +128,7 @@ htmlErrorReportFormat = "<!DOCTYPE html>\n" %
 
 -- | renders error report as HTML
 renderHTMLErrorReport :: Status -> ErrorReport -> TL.Text
-renderHTMLErrorReport = format $ htmlErrorReportFormat
+renderHTMLErrorReport = format htmlErrorReportFormat
 
 
 -- * ReportableError class
