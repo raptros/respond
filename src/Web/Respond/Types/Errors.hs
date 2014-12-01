@@ -7,6 +7,7 @@ contains the ErrorReport data type and tools for constructing error reports, alo
 module Web.Respond.Types.Errors where
 
 import Data.Aeson
+import Data.Aeson.Encode (encodeToTextBuilder)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
@@ -15,13 +16,9 @@ import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Scientific as Sci
 import Data.Int (Int64)
 import Formatting
-import Data.Foldable (fold, foldMap)
-import Control.Applicative ((<$>), (<*>), pure)
-import Data.Monoid (mappend, (<>))
+import Control.Applicative ((<$>), (<*>))
 import Data.Vector ()
 import Data.Bool (bool)
-import qualified Data.HashMap.Strict as HM
-import qualified Data.List as Li
 --import Control.Lens (lens, (%~))
 
 import Network.HTTP.Types.Status
@@ -99,47 +96,43 @@ valueFold _ _ _ f _ _ (String s) = f s
 valueFold _ _ _ _ f _ (Array a) = f a
 valueFold _ _ _ _ _ f (Object o) = f o
 
-data JContainer = JObj | JArr | Root
-
--- *** formatters for plain text
+data JContainer = JObj | JArr | JRoot
 
 mkIndent :: Int64 -> TLB.Builder
 mkIndent = TLB.fromLazyText . flip TL.replicate " "
 
-newlineIndent :: Int64 -> TLB.Builder
-newlineIndent indent = TLB.singleton '\n' <> mkIndent indent
+-- | format a JSON value in a simple way. let Aeson handle the formatting.
+simpleJsonValue :: Format Value
+simpleJsonValue = later encodeToTextBuilder
 
-plaintextValueFormat :: JContainer -> Int64 -> Format Value
-plaintextValueFormat container indent = later $ valueFold (bprint "null") (bprint boolFormat) (bprint sci) (bprint stext) (bprint $ plaintextArrFormat container indent) (bprint $ plaintextObjectFormat container indent)
-
-plaintextArrFormat :: JContainer -> Int64 -> Format Array
-plaintextArrFormat _ indent = later $ foldMap $ bprint ("\n" % now (mkIndent indent) % "- " % plaintextValueFormat JArr (indent + 2))
-
-objectItemPlaintextFormat :: Int64 -> Format (T.Text, Value)
-objectItemPlaintextFormat indent = later . uncurry . bprint $ stext % ": " % plaintextValueFormat JObj indent 
-
-formatObjectPlaintext :: JContainer -> Int64 -> Object -> TLB.Builder
-formatObjectPlaintext container indent = bool <$> mkObj <*> pure (bprint "{}") <*> HM.null
-    where
-    mkObj = fold . separate container . preppedItems
-    separate Root = Li.intersperse (TLB.fromLazyText "\n") . fmap (mappend (mkIndent indent))
-    separate JArr = Li.intersperse (newlineIndent indent)
-    separate JObj = fmap (mappend (newlineIndent indent))
-    preppedItems = fmap (bprint $ objectItemPlaintextFormat (indent + 2)) . HM.toList
-
-plaintextObjectFormat :: JContainer -> Int64 -> Format Object
-plaintextObjectFormat container indent = later $ formatObjectPlaintext container indent
-
+-- *** formatters for plain text
 -- | renders error report as plain text
 renderPlainTextErrorReport :: Status -> ErrorReport -> TL.Text
-renderPlainTextErrorReport = format $ statusFormat % "\n" % errorReportFormat ("reason: " % stext % "\n") ("message: " % stext % "\n") (fconst "details elided\n")
+renderPlainTextErrorReport = format $ statusFormat % "---\n" % errorReportFormat ("reason: " % stext % "\n") ("message: " % stext % "\n") ("details: " % simpleJsonValue % "\n")
 
--- *** formatters for HTML
+pFormat :: Buildable a => Int64 -> Format a
+pFormat indent = now (mkIndent indent) % "<p>" % build % "</p>\n"
 
+htmlErrorReportFormat :: forall b. Holey TLB.Builder b (Status -> ErrorReport -> b)
+htmlErrorReportFormat = "<!DOCTYPE html>\n" %
+    "<html>\n" % 
+    "  <head>\n" % 
+    "    <title>Error</title>\n" %
+    "  </head>\n" %
+    "  <body>\n" %
+    "    <h1>" % statusFormat % "</h1>\n" %
+    errorReportFormat reasonFmt msgFmt detailsFmt % 
+    "  </body>\n" %
+    "</html>\n"
+    where
+    reasonFmt = pFormat 4 %. ("reason: " % stext)
+    msgFmt = pFormat 4 %. ("message: " % stext)
+    detailsFmt = pFormat 4 %. ("details: " % "<span>" % simpleJsonValue % "</span>")
 
 -- | renders error report as HTML
 renderHTMLErrorReport :: Status -> ErrorReport -> TL.Text
-renderHTMLErrorReport = format $ "<h1>" % statusFormat % "</h1>" % "<p/>" % errorReportFormat ("reason: " % stext % "<br/>") ("message: " % stext % "<br/>") (fconst "details elided")
+renderHTMLErrorReport = format $ htmlErrorReportFormat
+
 
 -- * ReportableError class
 
