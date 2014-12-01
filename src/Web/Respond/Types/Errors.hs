@@ -106,10 +106,10 @@ plaintextErrorReportFormat = statusFormat % "---\n" % errorReportFormat ("reason
 renderPlainTextErrorReport :: Status -> ErrorReport -> TL.Text
 renderPlainTextErrorReport = format plaintextErrorReportFormat
 
+-- *** formatters for HTML
+
 pFormat :: Buildable a => Int64 -> Format a
 pFormat indent = now (mkIndent indent) % "<p>" % build % "</p>\n"
-
--- *** HTML
 
 -- | the html format
 htmlErrorReportFormat :: forall b. Holey TLB.Builder b (Status -> ErrorReport -> b)
