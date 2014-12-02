@@ -1,3 +1,8 @@
+{-|
+Description: newtypes for working with json in requests and responses
+
+defines newtypes 'Json' and 'JsonS' for decoding request bodies as JSON (lazy vs strict) and encoding responses as json
+-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Web.Respond.Types.Json where
 

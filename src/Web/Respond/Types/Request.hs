@@ -1,3 +1,8 @@
+{-|
+Description: defines the 'FromBody' typeclass
+
+defines the 'FromBody' typeclass. this needs to live out here so that certain other modules can use it without having circular dependencies.
+-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 module Web.Respond.Types.Request where

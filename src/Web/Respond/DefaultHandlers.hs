@@ -13,7 +13,6 @@ import qualified Data.ByteString as BS
 import Network.HTTP.Types.Status
 --import Network.HTTP.Types.Header
 import Network.HTTP.Types.Method
-import qualified Data.Text as T
 --import Control.Lens (view)
 
 import Web.Respond.Types
