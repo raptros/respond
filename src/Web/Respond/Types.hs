@@ -14,24 +14,22 @@ provides tools for implementing instances of the 'ToResponseBody' by matching ag
 == "Web.Respond.Types.Errors"
 defines the typeclass 'ReportableError', similar to 'ToResponseBody' except with a fallback 'ResponseBody' when unable to match the Accept header.
 also defines the 'ErrorReport' datatype, and implements 'ReportableError' for it, defining the formats for rendering it to a response.
+provides an instance of 'ReportableError' for unicode errors.
 
 == "Web.Respond.Types.Request"
-defines the 'FromBody' typeclass.
-
-== "Web.Respond.Types.Json"
-defines 'Json' and 'JsonS' newtypes, and provides appropriate 'FromBody' and 'ToResponseBody' instances for both.
+defines the 'FromBody' typeclass along with
+- 'TextBody' newtype, with an appropriate 'FromBody' instance
+- 'Json' and 'JsonS' newtypes, with appropriate 'FromBody' and 'ToResponseBody' instances
 
 -}
 module Web.Respond.Types (
                         module Web.Respond.Types.Path,
                         module Web.Respond.Types.Response,
                         module Web.Respond.Types.Errors,
-                        module Web.Respond.Types.Request,
-                        module Web.Respond.Types.Json
+                        module Web.Respond.Types.Request
                         ) where
 
 import Web.Respond.Types.Path
 import Web.Respond.Types.Response
 import Web.Respond.Types.Request
 import Web.Respond.Types.Errors
-import Web.Respond.Types.Json

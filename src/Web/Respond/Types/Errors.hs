@@ -9,13 +9,15 @@ module Web.Respond.Types.Errors where
 import Data.Aeson
 import Data.Aeson.Encode (encodeToTextBuilder)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding.Error as T
 import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TLB
 import Data.Int (Int64)
 import Formatting
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>), (<*>), pure)
+import Data.Monoid
 import Data.Vector ()
 import Data.Bool (bool)
 --import Control.Lens (lens, (%~))
@@ -60,6 +62,10 @@ errorReportWithDetails reason details = ErrorReport reason Nothing (Just $ toJSO
 -- | error report with all the fixings
 fullErrorReport :: ToJSON d => T.Text -> T.Text -> d -> ErrorReport
 fullErrorReport reason message details = ErrorReport reason (Just message) (Just $ toJSON details)
+
+-- | construct a single-key json object if the value is present
+single :: ToJSON a => T.Text -> Maybe a -> Value
+single k = object . maybe mempty (pure . (k .=))
 
 -- ** rendering ErrorReports
 
@@ -144,3 +150,16 @@ class ReportableError e where
 
 instance ReportableError ErrorReport where
     reportError status = matchToContentTypesDefault (textUtf8 "text/html" $ renderHTMLErrorReport status) [jsonMatcher, textUtf8 "text/plain" $ renderPlainTextErrorReport status]
+
+-- ** instance tools
+reportAsErrorReport :: (a -> ErrorReport) -> Status -> a -> BS.ByteString -> ResponseBody
+reportAsErrorReport f status = reportError status . f
+
+-- | this instance constructs an 'ErrorReport' for the exception and uses
+-- 'reportAsErrorReport'
+instance ReportableError T.UnicodeException where
+    reportError = reportAsErrorReport report
+        where
+        report :: T.UnicodeException -> ErrorReport
+        report (T.DecodeError msg mInput) = fullErrorReport "unicode decode failed" (T.pack msg) (single "input" mInput)
+        report (T.EncodeError msg mInput) = fullErrorReport "unicode encode failed" (T.pack msg) (single "input" mInput)

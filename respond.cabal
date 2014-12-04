@@ -48,7 +48,6 @@ library
         Web.Respond.Types.Response
         Web.Respond.Types.Request
         Web.Respond.Types.Errors
-        Web.Respond.Types.Json
         Web.Respond.Monad
         Web.Respond.Response
         Web.Respond.DefaultHandlers
