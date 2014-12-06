@@ -239,14 +239,21 @@ which handles requests to e.g.
 
 #### extracting request body values
 todo
+- FromBody
+- Text and Json wrappers
+- lazy vs strict IO
+
+#### authentication and authorization tools
+todo
 
 ### generating responses
 todo
+- ToResponseBody and content negotiation
 
 #### ErrorReport and ReportableError
 todo
 
 #### handling failures and errors during request processing
 todo
-
-
+- RequestErrorHandlers
+- exception handling (not good)
