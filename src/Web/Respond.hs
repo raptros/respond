@@ -40,6 +40,9 @@ contains request method matching tools
 === "Web.Respond.Path"
 contains path matching tools
 
+=== "Web.Respond.HListUtils"
+you'll want to use these with the path matching tools
+
 -}
 module Web.Respond (
                    module Web.Respond.Monad,
@@ -51,6 +54,7 @@ module Web.Respond (
                    module Web.Respond.Request,
                    module Web.Respond.Method,
                    module Web.Respond.Path,
+                   module Web.Respond.HListUtils
                    ) where
 
 import Web.Respond.Types
@@ -62,3 +66,4 @@ import Web.Respond.Method
 import Web.Respond.Path
 import Web.Respond.DefaultServer
 import Web.Respond.Run
+import Web.Respond.HListUtils 

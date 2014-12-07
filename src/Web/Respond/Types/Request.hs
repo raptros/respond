@@ -39,6 +39,11 @@ newtype TextBody = TextBody { getTextBody :: TL.Text } deriving (Eq, Show)
 instance FromBody T.UnicodeException TextBody where
     fromBody = fmap TextBody . TL.decodeUtf8'
 
+newtype TextBodyS = TextBodyS { getTextBodyS :: T.Text } deriving (Eq, Show)
+
+instance FromBody T.UnicodeException TextBodyS where
+    fromBody = fmap (TextBodyS . TL.toStrict) . TL.decodeUtf8'
+
 -- ** JSON
 
 -- | convert a parse failure string message into an 'ErrorReport'; this
