@@ -20,12 +20,11 @@ import Web.Respond.Response
 
 -- * extracting the request body
 
--- | gets the body as a lazy ByteString using lazy IO (see 'Network.Wai.lazyRequestBody')
+-- | gets the body as a lazy ByteString using lazy IO (see 'lazyRequestBody')
 getBodyLazy :: MonadRespond m => m LBS.ByteString
 getBodyLazy = getRequest >>= liftIO . lazyRequestBody
 
--- | gets the body as a lazy ByteString using /strict/ IO (see
--- 'Network.Wai.strictRequestBody'
+-- | gets the body as a lazy ByteString using /strict/ IO (see 'strictRequestBody')
 getBodyStrict :: MonadRespond m => m LBS.ByteString
 getBodyStrict = getRequest >>= liftIO . strictRequestBody
 
@@ -69,17 +68,23 @@ authenticate auth inner = auth >>= either handleAuthFailed inner
 reauthenticate :: (MonadRespond m, ReportableError e) => Maybe a -> m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior 
 
--- | if the authorization action (m (Maybe e)) returns a value, respond
--- immediately using 'handleDenied'. if the auth action produces Nothing,
--- run the inner route.
-authorize :: (ReportableError e, MonadRespond m) => m (Maybe e) -> m ResponseReceived -> m ResponseReceived
-authorize check inner = check >>= maybe inner handleDenied
+-- | if given an error report value , respond immediately using 
+-- 'handleDenied'. otherwise, run the inner route.
+authorize :: (ReportableError e, MonadRespond m) => Maybe e -> m ResponseReceived -> m ResponseReceived
+authorize check inner = maybe inner handleDenied check
 
--- | authorize using an action that produces an Either. if the action
--- results in Left, fail using 'handleDenied' with the ReportableError.
--- if it results in Right, run the inner action using the produced value
-authorizeE :: (ReportableError e, MonadRespond m) => m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
-authorizeE check inner = check >>= either handleDenied inner
+-- | if the bool is true, run the inner. otherwise, handleDenied the
+-- report.
+authorizeBool :: (ReportableError e, MonadRespond m) => e -> Bool -> m ResponseReceived -> m ResponseReceived
+authorizeBool report allowed inner
+    | allowed = inner
+    | otherwise = handleDenied report
+
+-- | authorize using an Either; if it's Left, fail using 'handleDenied' on
+-- the contained ReportableError. if it's right, run the inner action using
+-- the contained value,
+authorizeE :: (ReportableError e, MonadRespond m) => Either e a -> (a -> m ResponseReceived) -> m ResponseReceived
+authorizeE check inner = either handleDenied inner check
 
 -- * content negotiation
 
