@@ -46,18 +46,13 @@ instance FromBody T.UnicodeException TextBodyS where
 
 -- ** JSON
 
--- | convert a parse failure string message into an 'ErrorReport'; this
--- gets used to implement 'FromBody' for 'Json' and 'JsonS'
-reportJsonParseError :: String -> ErrorReport
-reportJsonParseError msg = errorReportWithMessage "parse_failed" (T.pack msg)
-
 -- | newtype for things that should be encoded as or parsed as Json.
 -- 
 -- the FromBody instance uses 'Data.Aeson.eitherDecode' - the lazy version.
 newtype Json a = Json { getJson :: a }
 
-instance FromJSON a => FromBody ErrorReport (Json a) where
-    fromBody = bimap reportJsonParseError Json . eitherDecode
+instance FromJSON a => FromBody JsonParseError (Json a) where
+    fromBody = bimap JsonParseError Json . eitherDecode
 
 instance ToJSON a => ToResponseBody (Json a) where
     toResponseBody = matchAcceptJson . getJson
@@ -68,8 +63,8 @@ instance ToJSON a => ToResponseBody (Json a) where
 -- parser.
 newtype JsonS a = JsonS { getJsonS :: a }
 
-instance FromJSON a => FromBody ErrorReport (JsonS a) where
-    fromBody = bimap reportJsonParseError JsonS . eitherDecode'
+instance FromJSON a => FromBody JsonParseError (JsonS a) where
+    fromBody = bimap JsonParseError JsonS . eitherDecode'
 
 instance ToJSON a => ToResponseBody (JsonS a) where
     toResponseBody = matchAcceptJson . getJsonS

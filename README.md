@@ -238,22 +238,158 @@ which handles requests to e.g.
   turn uses `idAction "here" 55`.
 
 #### extracting request body values
-todo
-- FromBody
-- Text and Json wrappers
-- lazy vs strict IO
+respond defines the `FromBody` typeclass; instances of this class implement a
+function that either extracts a value of the instance type out of a lazy
+bytestring or produces an error value (see below for ReportableError).
+
+##### provided instances
+several newtype wrappers with FromBody instances have been provided for
+convenience.
+* `TextBody` is a wrapper around a lazy Text value. it decodes the bytestring
+  body as utf-8. it fails with a UnicodeException.
+* `TextBodyS` is like TextBody except that it converts lazy Text into strict Text
+  after decoding.
+* `Json` is a wrapper around a JSON Value. it uses Aeson's `eitherDecode` for
+  lazy conversion and wraps up a failure message with `JsonParseError`.
+* `JsonS` is also a wrapper around a JSON Value - it works much the same way as
+  the previous wrapper except that it uses `eitherDecode'` to perform immediate
+  conversion.
+
+##### getting the request body - lazy vs strict IO
+in `Web.Respond.Request`, there are 6 functions for extracting the request body
+as a `MonadRespond` action.
+* `getBodyLazy` uses Wai's `lazyRequestBody` function to lazily load the request
+  body. this may or may not be safe for your purposes.
+* `getBodyStrict` uses Wai's `strictRequestBody` function instead.
+* `extractBodyLazy` and `extractBodyStrict` build on `getBodyLazy` and
+  `getBodyStrict`, and apply the `getBody` method for the desired instance of
+  `FromBody`.
+* `withRequiredBody` and `withRequiredBody'` use `extractBodyLazy` and
+  `extractBodyStrict` and then run the passed continuation if a value was
+  successfully extracted. otherwise, they run `handleBodyParseFailure` to report
+  the error (see section on error reporting).
 
 #### authentication and authorization tools
-todo
+there are several functions that run inner actions based on passed values - the
+main difference between the authenticate and authorize functions is that when
+a failure is indicated, the former call `handleAuthFailed` and the latter call
+`handleDenied`.
 
 ### generating responses
-todo
-- ToResponseBody and content negotiation
+the `ToResponseBody` typeclass is defined to allow you to choose how a type
+being used a response value should be rendered based on content negotiation.
+this is accomplished by having the Accept header of the request be passed into
+the `toResponseBody` function. various utilities for matching on this header are
+provided, built on top of the http-media library.
+
+as an example, let's say you have a type `ExDocument` that you want to use as a
+response body, and various ways of rendering it.
+
+```haskell
+import qualified Data.Text as T
+import Network.HTTP.Media
+
+data ExDocument = ...
+
+-- you have the following ways of rendering it defined appropriately ...
+
+instance ToJSON ExDocument where
+    toJSON doc = undefined 
+
+renderDocPlaintext :: ExDocument -> T.Text
+renderDocPlaintext doc = undefined 
+
+renderDocHTML :: ExDocument -> T.Text
+renderDocHTML doc = undefined
+
+-- you can then use these rendering tools based on the Accept header
+-- by defining a ToResponseBody instance.
+instance ToResponseBody ExDocument where
+    toResponseBody = matchToContentTypes [
+        textUtf8 "text/html" renderDocHTML,
+        jsonMatcher,
+        textUtf8 "text/plain" renderDocPlaintext
+    ]
+```
+
+as this example hopefully illustrates, you do not have to handle the
+interpretation of the Accept header value yourself - you can rely on the
+http-media library and the provided convenience functions to select the
+appropriate encoding function. let's break down what they do:
+* `matchToContentTypes` takes a list of `MediaTypeMatcher`s, "prepares" them,
+  and uses the first one that matches (if any) to produce a ResponseBody. it is
+  defined so that it can be easily used to implement `toResponseBody` - you give
+  it the matcher list and it gives you the implementation.
+* `ResponseBody` is a pair of the value to use as the content type header and
+  the bytestring to use as the body.
+* a `MediaTypeMatcher` is a pair of a media type value and a function that
+  produces a bytestring for a value.
+* `prepareMediaTypeMatcher` is a function that `matchToContentTypes` uses to
+  construct a pair of media type and response body out of a value and a media
+  type matcher.
+* `textUtf8` takes a media type and a Text based renderer, and produces a
+  `MediaTypeMatcher` that will render the value to Text and then encode it as
+  utf-8; it will also add the parameter specifying the encoding to the media
+  type you pass in.
+* jsonMatcher is a MediaTypeMatcher for any instance of `ToJSON`;
+  unsurprisingly, it matches the media type `application/json`.
+
+once you have an instance of `ToResponseBody` for a type, you can use the functions in
+`Web.Respond.Response` to send responses for that type. for instance, let's say
+your app monad has a way to fetch a document from the database ...
+
+```haskell
+lookupDocument :: ExampleAppMonad m => DocId -> m ExDocument
+lookupDocument id = undefined
+
+docLookupRoute  :: (MonadRespond m, ExampleAppMonad m) -> DocId -> m ResponseReceived
+docLookupRoute id = do
+    doc <- lookupDocument id
+    respondOk doc
+```
+
+now, you may be wondering what happens if the request's Accept header can't be
+matched; e.g. someone made a request into docLookupRoute but specified the
+header `Accept: text/xml` but ExDocument doesn't render to xml. all of the
+functions built on `respondWith` use `respondUnacceptable` if `toResponseBody`
+produces `Nothing`; this sends back a `406 Unacceptable` response with an empty
+body and no content type.
+
+if you know that a set of inner routes will only produce certain content types,
+you can handle those early on using the `checkAccepts` function, which takes a
+list of media types that the inner route can produce, and uses
+`respondUnacceptable` if the request's Accept header doesn't match any of them.
+
+also, it is worth keeping in mind that the respond library will default to `*/*`
+if the request does not set an Accept header explicitly.
 
 #### ErrorReport and ReportableError
-todo
+An ErrorReport is a container for information about errors that occur during
+request processing. it has a ReportableError instance that defaults to rendering
+the error report as HTML with the status code as a header, and also renders to
+plain text and JSON.
+
+ReportableError is similar to ToResponseBody except that it must choose a
+default rendering if it can't match the Accept header. it is also given the
+status code that will be sent in the response so it may render the status in the
+body.
+
+if you want to make other errors into ReportableErrors, you may find it
+convenient to define a function to convert values of your error type into an
+appropriate ErrorReport value and then define the ReportableError instance using
+`reportAsErrorReport`.
 
 #### handling failures and errors during request processing
-todo
-- RequestErrorHandlers
-- exception handling (not good)
+various routing failures are handled by using the appropriate handle\* function.
+these functions get the appropriate function from the current
+`RequestErrorHandlers` value and run it against the arguments.
+
+it should be possible to modify these functions at any point during routing -
+installing a new function for a particular handler can allow you to modify how
+the inner route will respond if it fails in a way that uses the modified
+handler, and it should allow you to perform other actions, such as any sort of
+cleanup you might need. 
+
+currently, exception handling is a particularly weak part of the respond
+library - `catchRespond` only works on specific exception types, so there is no
+top level exception handling.

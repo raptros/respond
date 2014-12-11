@@ -151,7 +151,7 @@ class ReportableError e where
 instance ReportableError ErrorReport where
     reportError status = matchToContentTypesDefault (textUtf8 "text/html" $ renderHTMLErrorReport status) [jsonMatcher, textUtf8 "text/plain" $ renderPlainTextErrorReport status]
 
--- ** instance tools
+-- ** instances etc
 reportAsErrorReport :: (a -> ErrorReport) -> Status -> a -> BS.ByteString -> ResponseBody
 reportAsErrorReport f status = reportError status . f
 
@@ -163,3 +163,10 @@ instance ReportableError T.UnicodeException where
         report :: T.UnicodeException -> ErrorReport
         report (T.DecodeError msg mInput) = fullErrorReport "unicode decode failed" (T.pack msg) (single "input" mInput)
         report (T.EncodeError msg mInput) = fullErrorReport "unicode encode failed" (T.pack msg) (single "input" mInput)
+
+-- | newtype wrapper for the error messages produced while parsing json so
+-- we can have a ReportableError instance for it.
+newtype JsonParseError = JsonParseError { jsonParseErrorMsg :: String } deriving (Eq, Show)
+
+instance ReportableError JsonParseError where
+    reportError = reportAsErrorReport $ errorReportWithMessage "parse_failed" . T.pack . jsonParseErrorMsg

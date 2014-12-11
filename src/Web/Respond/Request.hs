@@ -20,12 +20,11 @@ import Web.Respond.Response
 
 -- * extracting the request body
 
--- | gets the body as a lazy ByteString using lazy IO (see 'Network.Wai.lazyRequestBody')
+-- | gets the body as a lazy ByteString using lazy IO (see 'lazyRequestBody')
 getBodyLazy :: MonadRespond m => m LBS.ByteString
 getBodyLazy = getRequest >>= liftIO . lazyRequestBody
 
--- | gets the body as a lazy ByteString using /strict/ IO (see
--- 'Network.Wai.strictRequestBody'
+-- | gets the body as a lazy ByteString using /strict/ IO (see 'strictRequestBody')
 getBodyStrict :: MonadRespond m => m LBS.ByteString
 getBodyStrict = getRequest >>= liftIO . strictRequestBody
 
@@ -69,7 +68,7 @@ authenticate auth inner = auth >>= either handleAuthFailed inner
 reauthenticate :: (MonadRespond m, ReportableError e) => Maybe a -> m (Either e a) -> (a -> m ResponseReceived) -> m ResponseReceived
 reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior 
 
--- | if given an error report value , respond i mmediately using 
+-- | if given an error report value , respond immediately using 
 -- 'handleDenied'. otherwise, run the inner route.
 authorize :: (ReportableError e, MonadRespond m) => Maybe e -> m ResponseReceived -> m ResponseReceived
 authorize check inner = maybe inner handleDenied check
