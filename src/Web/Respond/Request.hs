@@ -71,20 +71,20 @@ reauthenticate prior auth inner = maybe (authenticate auth inner) inner prior
 -- | if given an error report value , respond immediately using 
 -- 'handleDenied'. otherwise, run the inner route.
 authorize :: (ReportableError e, MonadRespond m) => Maybe e -> m ResponseReceived -> m ResponseReceived
-authorize check inner = maybe inner handleDenied check
+authorize check inner = maybe inner handleAccessDenied check
 
 -- | if the bool is true, run the inner. otherwise, handleDenied the
 -- report.
 authorizeBool :: (ReportableError e, MonadRespond m) => e -> Bool -> m ResponseReceived -> m ResponseReceived
 authorizeBool report allowed inner
     | allowed = inner
-    | otherwise = handleDenied report
+    | otherwise = handleAccessDenied report
 
 -- | authorize using an Either; if it's Left, fail using 'handleDenied' on
 -- the contained ReportableError. if it's right, run the inner action using
 -- the contained value,
 authorizeE :: (ReportableError e, MonadRespond m) => Either e a -> (a -> m ResponseReceived) -> m ResponseReceived
-authorizeE check inner = either handleDenied inner check
+authorizeE check inner = either handleAccessDenied inner check
 
 -- * content negotiation
 
@@ -98,4 +98,4 @@ routeAccept def mapped = getAcceptHeader >>= fromMaybe def . Media.mapAcceptMedi
 -- | defends the inner routes by first checking the Accept header and
 -- failing if it cannot accept any media type in the list
 checkAccepts :: MonadRespond m => [Media.MediaType] -> m ResponseReceived -> m ResponseReceived
-checkAccepts list action = getAcceptHeader >>= maybe respondUnacceptable (const action) . Media.matchAccept list
+checkAccepts list action = getAcceptHeader >>= maybe handleUnacceptableResponse (const action) . Media.matchAccept list

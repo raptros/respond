@@ -20,18 +20,18 @@ import System.Log.FastLogger (LoggerSet)
 -- * using RespondT
 
 -- | build an 'Network.Wai.Application' from a 'RespondT' router stack.
-respondApp :: MonadIO m  => RequestErrorHandlers -- ^ however you want errors handled
+respondApp :: MonadIO m  => FailureHandlers -- ^ however you want failures handled
               -> (forall a. m a -> IO a) -- ^ how to unpeel your monad to 'IO'
-              -> RespondT m ResponseReceived -- ^ your handler - must respond.
+              -> RespondT m ResponseReceived -- ^ your api - must respond.
               -> Application -- ^ give this to warp or something
 respondApp handlers lifter api req res = lifter (runRespondT api handlers req res)
 
--- | it's 'respondApp' with 'defaultRequestErrorHandlers' passed in.
+-- | it's 'respondApp' with 'defaultHandlers' passed in.
 respondAppDefault :: MonadIO m => (forall a. m a -> IO a)  -> RespondT m ResponseReceived -> Application 
-respondAppDefault = respondApp defaultRequestErrorHandlers
+respondAppDefault = respondApp defaultHandlers
 
 -- | serve a RespondT router app using 'runWaiApp' on 'respondApp'.
-serveRespond :: MonadIO m => Warp.Port -> LoggerSet -> RequestErrorHandlers -> (forall a. m a -> IO a) -> RespondT m ResponseReceived -> IO ()
+serveRespond :: MonadIO m => Warp.Port -> LoggerSet -> FailureHandlers -> (forall a. m a -> IO a) -> RespondT m ResponseReceived -> IO ()
 serveRespond port loggerSet handlers lifter api = runWaiApp port loggerSet (respondApp handlers lifter api)
 
 -- | serve a RespondT router app using 'runWaiApp' on 'respondAppDefault'
@@ -44,7 +44,7 @@ serveRespondDefault port loggerSet lifter api = runWaiApp port loggerSet (respon
 type RespondM a = RespondT IO a
 
 -- | build an Application out of a RespondM handler.
-simpleRespondApp :: RequestErrorHandlers -> RespondM ResponseReceived -> Application
+simpleRespondApp :: FailureHandlers -> RespondM ResponseReceived -> Application
 simpleRespondApp handlers = respondApp handlers id 
 
 -- | build an Application out of a RespondM handler using the default error handlers
@@ -52,7 +52,7 @@ simpleRespondAppDefault :: RespondM ResponseReceived -> Application
 simpleRespondAppDefault = respondAppDefault id
 
 -- | serve a RespondM handler
-serveSimpleRespond :: Warp.Port -> LoggerSet -> RequestErrorHandlers -> RespondM ResponseReceived -> IO ()
+serveSimpleRespond :: Warp.Port -> LoggerSet -> FailureHandlers -> RespondM ResponseReceived -> IO ()
 serveSimpleRespond port loggerSet handlers = serveRespond port loggerSet handlers id 
 
 -- | serve a RespondM handler using the default error handlers

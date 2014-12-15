@@ -42,18 +42,17 @@ getAcceptHeader = findHeaderDefault hAccept "*/*"
 respondEmptyBody :: MonadRespond m => Status -> ResponseHeaders -> m ResponseReceived
 respondEmptyBody status headers = respond $ responseLBS status headers ""
 
--- | respond that the request's accept header could not be satisfied
-respondUnacceptable :: MonadRespond m => m ResponseReceived
-respondUnacceptable = respondEmptyBody notAcceptable406 []
-
 -- | respond by getting the information from a 'ResponseBody'
 respondUsingBody :: MonadRespond m => Status -> ResponseHeaders -> ResponseBody -> m ResponseReceived
 respondUsingBody status headers body = respond $ mkResponseForBody status headers body
 
 -- | respond by using the ToResponseBody instance for the value and
--- determining 
+-- determining if it can be converted into an acceptable response body.
+--
+-- calls 'handleUnacceptableResponse' if an acceptable content type cannot
+-- be produced..
 respondWith :: (MonadRespond m, ToResponseBody a) => Status -> ResponseHeaders -> a -> m ResponseReceived
-respondWith status headers body = getAcceptHeader >>= maybe respondUnacceptable respond . mkResponse status headers body
+respondWith status headers body = getAcceptHeader >>= maybe handleUnacceptableResponse respond . mkResponse status headers body
 
 --mkResponse :: ToResponseBody a => Status -> ResponseHeaders -> a -> BS.ByteString -> Maybe Response
 
@@ -79,48 +78,51 @@ respondNotFound = respondReportError notFound404 []
 -- and applies it to the arguments
 handleUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived
 handleUnsupportedMethod supported unsupported = do
-    handler <- getREH (view rehUnsupportedMethod)
+    handler <- getHandler (view unsupportedMethod)
     handler supported unsupported
 
 -- | an action that gets the installed unmatched path handler and uses it
 handleUnmatchedPath :: MonadRespond m => m ResponseReceived
-handleUnmatchedPath = join (getREH (view rehUnmatchedPath))
+handleUnmatchedPath = join (getHandler (view unmatchedPath))
+
+-- | get and use handler for unacceptable response types
+handleUnacceptableResponse :: MonadRespond m => m ResponseReceived
+handleUnacceptableResponse = join (getHandler (view unacceptableResponse))
 
 -- | generic handler-getter for things that use ErrorReports
 useHandlerForReport :: (MonadRespond m, ReportableError e) 
-                    => (RequestErrorHandlers -> e -> m ResponseReceived) 
+                    => (FailureHandlers -> e -> m ResponseReceived) 
                     -- ^ a handler-getter that gets a handler that takes
                     -- an error report
                     -> e 
                     -- ^ the error
                     -> m ResponseReceived
 useHandlerForReport getter e = do
-    h <- getREH getter 
+    h <- getHandler getter 
     h e
 
 -- | an action that gets the installed body parse failure handler and
 -- applies it
 handleBodyParseFailure :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-handleBodyParseFailure = useHandlerForReport (view rehBodyParseFailed)
+handleBodyParseFailure = useHandlerForReport (view bodyParseFailed)
 
 -- | get and use installed auth failed handler
 handleAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-handleAuthFailed = useHandlerForReport (view rehAuthFailed)
+handleAuthFailed = useHandlerForReport (view authFailed)
 
--- | get and use denied handler
-handleDenied :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
-handleDenied = useHandlerForReport (view rehDenied)
+-- | get and use access denied handler
+handleAccessDenied :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
+handleAccessDenied = useHandlerForReport (view accessDenied)
 
 -- | get and use handler for caught exceptions.
-handleException :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
-handleException = useHandlerForReport (view rehException)
-
+handleCaughtException :: (ReportableError e, MonadRespond m) => e -> m ResponseReceived
+handleCaughtException = useHandlerForReport (view caughtException)
 
 -- | get a specific handler.
 --
--- > getREH = (<$> getREHs)
-getREH :: MonadRespond m => (RequestErrorHandlers -> a) -> m a
-getREH = (<$> getREHs)
+-- > getHandler = (<$> getHandlers)
+getHandler :: MonadRespond m => (FailureHandlers -> a) -> m a
+getHandler = (<$> getHandlers)
 
 -- * other response utilities.
 
@@ -128,7 +130,7 @@ getREH = (<$> getREHs)
 maybeNotFound :: (ReportableError e, MonadRespond m) => e -> (a -> m ResponseReceived) -> Maybe a -> m ResponseReceived
 maybeNotFound = maybe . respondReportError notFound404 []
 
--- | catch Exceptions using MonadCatch, and use 'handleException' to
+-- | catch Exceptions using MonadCatch, and use 'handleCaughtException' to
 -- respond with an error report.
 catchRespond :: (MonadCatch m, MonadRespond m, ReportableError r, Exception e) => (e -> r) -> m ResponseReceived -> m ResponseReceived
-catchRespond = handle . (handleException .)
+catchRespond = handle . (handleCaughtException .)

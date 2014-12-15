@@ -22,14 +22,15 @@ module Web.Respond.Monad (
                          runRespondT,
                          mapRespondT,
                          -- * handling errors
-                         RequestErrorHandlers(..),
+                         FailureHandlers(..),
                          -- ** Getters for each handler
-                         rehUnsupportedMethod, 
-                         rehUnmatchedPath, 
-                         rehBodyParseFailed,
-                         rehAuthFailed,
-                         rehDenied,
-                         rehException
+                         unsupportedMethod, 
+                         unmatchedPath, 
+                         bodyParseFailed,
+                         authFailed,
+                         accessDenied,
+                         caughtException,
+                         unacceptableResponse
                          ) where
 
 import Control.Applicative
@@ -56,12 +57,12 @@ class (Functor m, MonadIO m) => MonadRespond m where
     respond :: Response -> m ResponseReceived
     -- | get out the request.
     getRequest :: m Request
-    -- | get the 'RequestErrorHandlers'.
-    getREHs :: m RequestErrorHandlers
+    -- | get the 'FailureHandlers'.
+    getHandlers :: m FailureHandlers
     -- | run an inner action that will see an updates set of error
     -- handlers. this is useful when you know that inner actions will need
     -- to do resource cleanup or something.
-    withREHs :: (RequestErrorHandlers -> RequestErrorHandlers) -> m a -> m a
+    withHandlers :: (FailureHandlers -> FailureHandlers) -> m a -> m a
     -- | get the path as it's been consumed so far.
     getPath :: m PathConsumer
     -- | run the inner action with an updated path state.
@@ -70,42 +71,44 @@ class (Functor m, MonadIO m) => MonadRespond m where
 instance MonadRespond m => MonadRespond (ExceptT e m) where
     respond = lift . respond
     getRequest = lift getRequest
-    getREHs = lift getREHs
-    withREHs = mapExceptT . withREHs
+    getHandlers = lift getHandlers
+    withHandlers = mapExceptT . withHandlers
     getPath = lift getPath
     withPath = mapExceptT . withPath
 
 instance MonadRespond m => MonadRespond (MaybeT m) where
     respond = lift . respond
     getRequest = lift getRequest
-    getREHs = lift getREHs
-    withREHs = mapMaybeT . withREHs
+    getHandlers = lift getHandlers
+    withHandlers = mapMaybeT . withHandlers
     getPath = lift getPath
     withPath = mapMaybeT . withPath
 
 -- | record containing responders that request matching tools can use when
 -- failures occur.
-data RequestErrorHandlers = RequestErrorHandlers {
+data FailureHandlers = FailureHandlers {
     -- | what to do if the request method is not supported
-    _rehUnsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived,
+    _unsupportedMethod :: MonadRespond m => [StdMethod] -> Method -> m ResponseReceived,
     -- | what to do if the request path has no matches
-    _rehUnmatchedPath :: MonadRespond m => m ResponseReceived,
+    _unmatchedPath :: MonadRespond m => m ResponseReceived,
     -- | what to do if the body failed to parse
-    _rehBodyParseFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
+    _bodyParseFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authentication fails
-    _rehAuthFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
+    _authFailed :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when authorization fails
-    _rehDenied :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
+    _accessDenied :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
     -- | what to do when an exception has been caught
-    _rehException :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+    _caughtException :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived,
+    -- | what to do when no media type is acceptable
+    _unacceptableResponse :: (MonadRespond m) => m ResponseReceived
 }
 
-makeLenses ''RequestErrorHandlers
+makeLenses ''FailureHandlers
 
 -- | this is the environment data used by RespondT. you probably don't want
 -- to mess with this.
 data RespondData = RespondData {
-    _rehs :: RequestErrorHandlers,
+    _handlers :: FailureHandlers,
     _request :: Request,
     _responder :: Responder,
     _pathConsumer :: PathConsumer
@@ -122,14 +125,14 @@ newtype RespondT m a = RespondT {
 instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
     respond v = view responder >>= \r -> liftIO . r $ v
     getRequest = view request
-    getREHs = view rehs
-    withREHs handlers = local (rehs %~ handlers)
+    getHandlers = view handlers
+    withHandlers h = local (handlers %~ h)
     getPath = view pathConsumer
     withPath f = local (pathConsumer %~ f) 
 
--- | run the RespondT action with error handlers and request information.
-runRespondT :: RespondT m a -> RequestErrorHandlers -> Request -> Responder -> m a
-runRespondT (RespondT act) handlers req res = runReaderT act $ RespondData handlers req res (mkPathConsumer $ pathInfo req)
+-- | run the RespondT action with failure handlers and request information.
+runRespondT :: RespondT m a -> FailureHandlers -> Request -> Responder -> m a
+runRespondT (RespondT act) h req res = runReaderT act $ RespondData h req res (mkPathConsumer $ pathInfo req)
 
 mapRespondT :: (m a -> n b) -> RespondT m a -> RespondT n b
 mapRespondT f = RespondT . mapReaderT f . unRespondT

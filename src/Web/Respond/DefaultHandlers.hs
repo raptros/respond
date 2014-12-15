@@ -19,15 +19,16 @@ import Web.Respond.Types
 import Web.Respond.Monad
 import Web.Respond.Response
 
--- | default error handlers. uses the defaultXHandler for each _rehX.
-defaultRequestErrorHandlers :: RequestErrorHandlers
-defaultRequestErrorHandlers = RequestErrorHandlers {
-    _rehUnsupportedMethod = defaultUnsupportedMethodHandler,
-    _rehUnmatchedPath = defaultUnmatchedPathHandler,
-    _rehBodyParseFailed = defaultBodyParseFailureHandler,
-    _rehAuthFailed = defaultAuthFailedHandler,
-    _rehDenied = defaultDeniedHandler,
-    _rehException = defaultExceptionHandler
+-- | default failure handlers. uses the defaultXHandler for each field
+defaultHandlers :: FailureHandlers
+defaultHandlers = FailureHandlers {
+    _unsupportedMethod = defaultUnsupportedMethodHandler,
+    _unmatchedPath = defaultUnmatchedPathHandler,
+    _bodyParseFailed = defaultBodyParseFailureHandler,
+    _authFailed = defaultAuthFailedHandler,
+    _accessDenied = defaultAccessDeniedHandler,
+    _caughtException = defaultCaughtExceptionHandler,
+    _unacceptableResponse = defaultUnacceptableResponseHandler
 }
 
 -- | default unsupported method handler sends back an EmptyBody with status
@@ -49,9 +50,13 @@ defaultAuthFailedHandler :: (MonadRespond m, ReportableError e) => e -> m Respon
 defaultAuthFailedHandler = respondReportError unauthorized401 []
 
 -- | respond with 403
-defaultDeniedHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-defaultDeniedHandler = respondReportError forbidden403 []
+defaultAccessDeniedHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultAccessDeniedHandler = respondReportError forbidden403 []
 
 -- | respond with 500
-defaultExceptionHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
-defaultExceptionHandler = respondReportError internalServerError500 []
+defaultCaughtExceptionHandler :: (MonadRespond m, ReportableError e) => e -> m ResponseReceived
+defaultCaughtExceptionHandler = respondReportError internalServerError500 []
+
+-- | respond with 406
+defaultUnacceptableResponseHandler :: MonadRespond m => m ResponseReceived
+defaultUnacceptableResponseHandler = respondEmptyBody notAcceptable406 []
