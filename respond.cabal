@@ -1,7 +1,5 @@
-name:
-    respond
-version:
-    0.2.0.0
+name: respond
+version: 0.2.0.0
 homepage:
     http://github.com/raptros/respond
 license:

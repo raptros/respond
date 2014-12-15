@@ -23,8 +23,9 @@ I have three justifications for developing this library.
   will let you do that.
 
 ## using respond
-you'll probably want to look at the haddock documentation (link to come after 
-release) while you're reading this guide.
+you'll probably want to look at the haddock documentation
+([available on Hackage](http://hackage.haskell.org/package/respond)) while
+you're reading this guide.
 let's get started with a brief overview of how to use this library.
 
 ### a brief overview
