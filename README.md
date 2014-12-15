@@ -2,6 +2,26 @@
 a Haskell library built on top of WAI for processing and routing HTTP requests
 and generating responses.
 
+## motivation
+you might wonder why I went to the trouble of building respond when there are,
+at this point, plenty of libraries etc for HTTP routing in Haskell. (i could say
+that when I started, there weren't as many, but no one's going to believe that!)
+I have three justifications for developing this library.
+
+* some HTTP APIs will be best represented using a nested routing structure. this
+  is, in fact, the primary reason i wrote respond - while working on a different
+  project, i found that the nested routes in the API specification for that
+  project were not well served by other libraries. respond should serve in those
+  situations, where groups of routes repeatedly need the same shared routing
+  filters.
+* type-safe path matching and parameter extraction is useful, and respond has
+  it.
+* it's fairly simple - the core of it is a newtype wrapper for a ReaderT, and
+  the rest of the library contains convenience functions that interact with the
+  monadic interface that RespondT implements. if you want to interact directly
+  with the request, or build and send your own responses, the core interface
+  will let you do that.
+
 ## using respond
 you'll probably want to look at the haddock documentation (link to come after 
 release) while you're reading this guide.
@@ -27,9 +47,9 @@ provides build on top of. it defines a core set of actions:
 * `getRequest` gets the request that's currently being handled. if you ever 
   find yourself using this directly, get in touch; there's probably an 
   opportunity to add a new tool to the library or improve the existing ones!
-* `getREHs` gets out the `RequestErrorHandlers`. these define the responding
+* `getHandlers` gets out the `FailureHandlers`. these define the responding
   action to use when request matching or processing fails.
-* `withREHs` runs the inner `MonadRespond` action with a modified set of
+* `withHandlers` runs the inner `MonadRespond` action with a modified set of
   handlers; you can use this to add code to be run after the actual response is
   sent, or to change the response entirely.
 * `getPath` gets the current `PathConsumer`.
@@ -110,7 +130,7 @@ on error handling below.
 
 #### matching paths
 `PathMatcher a` is a newtype for functions that take `PathConsumer`s and produce
-`Maybe a`s. the `matchPath` functon uses these to choose the responding action
+`Maybe a`s. the `matchPath` function uses these to choose the responding action
 based on the current path state.
 
 `PathMatcher` is a functor, which lets you do things like wrap inner actions
@@ -128,7 +148,7 @@ Alternative. the Alternative instance is what allows you to choose different
 actions for different request paths, for instance
 
 ```haskell
--- for now, suppose this is at the top level of the api
+-- for now, suppose this is at the top level of the API
 pathExample0 :: RespondM ResponseReceived
 pathExample0 = matchPath $
     -- if the request is to e.g. http://localhost:3000/, rootAction will produce the response
@@ -166,7 +186,7 @@ against a `PathMatcher` (e.g. by using the function `pathExtract`)
   old state.
 
 these extractors can then be sequenced using the `(</>)` combinator, which takes
-advantage of the applicative instance of `PathExtractor` to put them together.
+advantage of the Applicative instance of `PathExtractor` to put them together.
 (now, if you happen to be looking at the documentation for this function, you
 might be wondering what all this HList stuff is about. we'll get to that soon.)
 
@@ -179,7 +199,7 @@ pathExample1 = matchPath $
     path (seg "one" </> seg "two" </> endOrSlash) someAction
 ```
 
-and someAction will only get run if the request is to eg
+and someAction will only get run if the request is to e.g.
 `http://localhost:3000/one/two/`
 
 it wouldn't make sense to call it `PathExtractor` if it couldn't extract values;
@@ -201,7 +221,7 @@ pathInnerAction1 num t1 t2 = ... -- does whatever
 
 pathExample2 :: RespondM ResponseReceived
 pathExample2 = matchPath $
-    path (seg seg "id" </> value </> seg "params" </> value </> value) pathInnerAction1
+    path (seg "id" </> value </> seg "params" </> value </> value) pathInnerAction1
 ```
 
 and e.g. a GET against `http://localhost:3000/id/42/params/one/two` would lead
@@ -273,7 +293,7 @@ as a `MonadRespond` action.
 there are several functions that run inner actions based on passed values - the
 main difference between the authenticate and authorize functions is that when
 a failure is indicated, the former call `handleAuthFailed` and the latter call
-`handleDenied`.
+`handleAccessDenied`.
 
 ### generating responses
 the `ToResponseBody` typeclass is defined to allow you to choose how a type
@@ -350,7 +370,7 @@ docLookupRoute id = do
 
 now, you may be wondering what happens if the request's Accept header can't be
 matched; e.g. someone made a request into docLookupRoute but specified the
-header `Accept: text/xml` but ExDocument doesn't render to xml. all of the
+header `Accept: text/xml` but ExDocument doesn't render to XML. all of the
 functions built on `respondWith` use `respondUnacceptable` if `toResponseBody`
 produces `Nothing`; this sends back a `406 Unacceptable` response with an empty
 body and no content type.
@@ -382,7 +402,7 @@ appropriate ErrorReport value and then define the ReportableError instance using
 #### handling failures and errors during request processing
 various routing failures are handled by using the appropriate handle\* function.
 these functions get the appropriate function from the current
-`RequestErrorHandlers` value and run it against the arguments.
+`FailureHandlers` value and run it against the arguments.
 
 it should be possible to modify these functions at any point during routing -
 installing a new function for a particular handler can allow you to modify how
