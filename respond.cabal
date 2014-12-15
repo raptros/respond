@@ -23,7 +23,7 @@ extra-source-files:
 cabal-version:
     >=1.10
 synopsis:
-    a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses
+    process and route HTTP requests and generate responses on top of WAI
 description:
     a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses. 
     see the source repository for a simple example application.
