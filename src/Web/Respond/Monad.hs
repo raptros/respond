@@ -14,6 +14,7 @@ you build your api using this stuff.
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 module Web.Respond.Monad (
                          -- * the monad interface
                          MonadRespond(..),
@@ -157,14 +158,26 @@ instance MonadBase b m => MonadBase b (RespondT m) where
 -- and these two demand TypeFamilies
 
 instance MonadTransControl RespondT where
+#if MIN_VERSION_monad_control(1, 0, 0)
+    type StT RespondT a = StT (ReaderT RespondData) a
+    liftWith = defaultLiftWith RespondT unRespondT
+    restoreT = defaultRestoreT RespondT
+#else
     newtype StT RespondT a = StRespond { unStRespond :: StT (ReaderT RespondData) a }
     liftWith = defaultLiftWith RespondT unRespondT StRespond
     restoreT = defaultRestoreT RespondT unStRespond
+#endif
 
 instance MonadBaseControl b m => MonadBaseControl b (RespondT m) where
+#if MIN_VERSION_monad_control(1, 0, 0)
+    type StM (RespondT m) a = ComposeSt RespondT m a
+    liftBaseWith = defaultLiftBaseWith
+    restoreM = defaultRestoreM
+#else
     newtype StM (RespondT m) a = StMT { unStMT :: ComposeSt RespondT m a}
     liftBaseWith = defaultLiftBaseWith StMT
     restoreM     = defaultRestoreM   unStMT
+#endif
 
 instance MonadLogger m => MonadLogger (RespondT m) where
     monadLoggerLog loc src level msg = lift $ monadLoggerLog loc src level msg
