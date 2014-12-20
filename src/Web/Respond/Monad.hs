@@ -48,7 +48,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Logger
 import Control.Monad.Catch
 
-import Control.Lens ((%~), makeLenses, view)
+import Control.Lens ((%~), (.~), makeLenses, view)
 import Web.Respond.Types
     
 -- | this class is the api for building your handler.
@@ -58,6 +58,8 @@ class (Functor m, MonadIO m) => MonadRespond m where
     respond :: Response -> m ResponseReceived
     -- | get out the request.
     getRequest :: m Request
+    -- | run the inner route with a modified request
+    withRequest :: Request -> m a -> m a
     -- | get the 'FailureHandlers'.
     getHandlers :: m FailureHandlers
     -- | run an inner action that will see an updates set of error
@@ -72,6 +74,7 @@ class (Functor m, MonadIO m) => MonadRespond m where
 instance MonadRespond m => MonadRespond (ExceptT e m) where
     respond = lift . respond
     getRequest = lift getRequest
+    withRequest = mapExceptT . withRequest
     getHandlers = lift getHandlers
     withHandlers = mapExceptT . withHandlers
     getPath = lift getPath
@@ -80,6 +83,7 @@ instance MonadRespond m => MonadRespond (ExceptT e m) where
 instance MonadRespond m => MonadRespond (MaybeT m) where
     respond = lift . respond
     getRequest = lift getRequest
+    withRequest = mapMaybeT . withRequest
     getHandlers = lift getHandlers
     withHandlers = mapMaybeT . withHandlers
     getPath = lift getPath
@@ -126,6 +130,7 @@ newtype RespondT m a = RespondT {
 instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
     respond v = view responder >>= \r -> liftIO . r $ v
     getRequest = view request
+    withRequest r = local (request .~ r)
     getHandlers = view handlers
     withHandlers h = local (handlers %~ h)
     getPath = view pathConsumer
