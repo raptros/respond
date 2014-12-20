@@ -34,13 +34,27 @@ module Web.Respond.Monad (
                          unacceptableResponse
                          ) where
 
+import Data.Monoid
 import Control.Applicative
 import Network.Wai
 import Network.HTTP.Types.Method
-import Control.Monad.Trans.Reader (ReaderT, runReaderT, mapReaderT)
-import Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
-import Control.Monad.Trans.Except (ExceptT, mapExceptT)
+import Control.Monad.Trans.Reader (ReaderT(ReaderT), runReaderT, mapReaderT)
+import qualified Control.Monad.Trans.Identity as Identity
+import qualified Control.Monad.Trans.Maybe as Maybe
+import qualified Control.Monad.Trans.List as List
+import qualified Control.Monad.Trans.Except as Except
+import qualified Control.Monad.Trans.Cont as Cont
+import qualified Control.Monad.Trans.State.Lazy as LazyState
+import qualified Control.Monad.Trans.State.Strict as StrictState
+import qualified Control.Monad.Trans.Writer.Lazy as LazyWriter
+import qualified Control.Monad.Trans.Writer.Strict as StrictWriter
+import qualified Control.Monad.Trans.RWS.Lazy as LazyRWS
+import qualified Control.Monad.Trans.RWS.Strict as StrictRWS
 import Control.Monad.Reader.Class
+import qualified Control.Monad.Cont.Class as Mtl
+import qualified Control.Monad.Error.Class as Mtl
+import qualified Control.Monad.State.Class as Mtl
+import qualified Control.Monad.Writer.Class as Mtl
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Base (MonadBase, liftBase, liftBaseDefault)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith, restoreT, defaultLiftWith, defaultRestoreT, MonadBaseControl, StM, liftBaseWith, defaultLiftBaseWith, restoreM, defaultRestoreM, ComposeSt)
@@ -71,23 +85,50 @@ class (Functor m, MonadIO m) => MonadRespond m where
     -- | run the inner action with an updated path state.
     withPath :: (PathConsumer -> PathConsumer) -> m a -> m a
 
-instance MonadRespond m => MonadRespond (ExceptT e m) where
-    respond = lift . respond
-    getRequest = lift getRequest
-    withRequest = mapExceptT . withRequest
-    getHandlers = lift getHandlers
-    withHandlers = mapExceptT . withHandlers
-    getPath = lift getPath
-    withPath = mapExceptT . withPath
+#define MRESPDEF(mapfun) {\
+    respond = lift . respond; \
+    getRequest = lift getRequest; \
+    withRequest = mapfun . withRequest; \
+    getHandlers = lift getHandlers; \
+    withHandlers = mapfun . withHandlers; \
+    getPath = lift getPath; \
+    withPath = mapfun . withPath; \
+    }
 
-instance MonadRespond m => MonadRespond (MaybeT m) where
-    respond = lift . respond
-    getRequest = lift getRequest
-    withRequest = mapMaybeT . withRequest
-    getHandlers = lift getHandlers
-    withHandlers = mapMaybeT . withHandlers
-    getPath = lift getPath
-    withPath = mapMaybeT . withPath
+instance MonadRespond m => MonadRespond (ReaderT a m) where MRESPDEF(mapReaderT)
+
+instance MonadRespond m => MonadRespond (Identity.IdentityT m) where MRESPDEF(Identity.mapIdentityT)
+
+instance MonadRespond m => MonadRespond (Maybe.MaybeT m) where MRESPDEF(Maybe.mapMaybeT)
+
+instance MonadRespond m => MonadRespond (List.ListT m) where MRESPDEF(List.mapListT)
+
+instance MonadRespond m => MonadRespond (Except.ExceptT e m) where MRESPDEF(Except.mapExceptT)
+
+instance MonadRespond m => MonadRespond (Cont.ContT r m) where MRESPDEF(Cont.mapContT)
+
+instance MonadRespond m => MonadRespond (LazyState.StateT s m) where MRESPDEF(LazyState.mapStateT)
+
+instance MonadRespond m => MonadRespond (StrictState.StateT s m) where MRESPDEF(StrictState.mapStateT)
+
+instance (MonadRespond m, Monoid w) => MonadRespond (LazyWriter.WriterT w m) where MRESPDEF(LazyWriter.mapWriterT)
+
+instance (MonadRespond m, Monoid w) => MonadRespond (StrictWriter.WriterT w m) where MRESPDEF(StrictWriter.mapWriterT)
+
+instance (Monoid w, MonadRespond m) => MonadRespond (LazyRWS.RWST r w s m) where MRESPDEF(LazyRWS.mapRWST)
+
+instance (Monoid w, MonadRespond m) => MonadRespond (StrictRWS.RWST r w s m) where MRESPDEF(StrictRWS.mapRWST)
+
+rmapLoggingT :: (m a -> n b) -> LoggingT m a -> LoggingT n b
+rmapLoggingT f = LoggingT . (f .) . runLoggingT
+
+rmapNoLoggingT :: (m a -> n b) -> NoLoggingT m a -> NoLoggingT n b
+rmapNoLoggingT f = NoLoggingT . f . runNoLoggingT
+
+instance MonadRespond m => MonadRespond (LoggingT m) where MRESPDEF(rmapLoggingT)
+
+instance MonadRespond m => MonadRespond (NoLoggingT m) where MRESPDEF(rmapNoLoggingT)
+
 
 -- | record containing responders that request matching tools can use when
 -- failures occur.
@@ -136,9 +177,12 @@ instance (Functor m, MonadIO m) => MonadRespond (RespondT m) where
     getPath = view pathConsumer
     withPath f = local (pathConsumer %~ f) 
 
+runRespondTBase :: RespondT m a -> RespondData -> m a
+runRespondTBase = runReaderT . unRespondT
+
 -- | run the RespondT action with failure handlers and request information.
 runRespondT :: RespondT m a -> FailureHandlers -> Request -> Responder -> m a
-runRespondT (RespondT act) h req res = runReaderT act $ RespondData h req res (mkPathConsumer $ pathInfo req)
+runRespondT act h req res = runRespondTBase act $ RespondData h req res (mkPathConsumer $ pathInfo req)
 
 mapRespondT :: (m a -> n b) -> RespondT m a -> RespondT n b
 mapRespondT f = RespondT . mapReaderT f . unRespondT
@@ -183,6 +227,26 @@ instance MonadBaseControl b m => MonadBaseControl b (RespondT m) where
     liftBaseWith = defaultLiftBaseWith StMT
     restoreM     = defaultRestoreM   unStMT
 #endif
+
+instance Mtl.MonadWriter w m => Mtl.MonadWriter w (RespondT m) where
+    writer = lift . Mtl.writer
+    tell = lift . Mtl.tell
+    listen = mapRespondT Mtl.listen
+    pass = mapRespondT Mtl.pass
+
+instance Mtl.MonadError e m => Mtl.MonadError e (RespondT m) where
+    throwError = lift . Mtl.throwError
+    catchError m h = RespondT $ Mtl.catchError (unRespondT m) (unRespondT . h)
+
+instance Mtl.MonadCont m => Mtl.MonadCont (RespondT m) where
+    callCC = liftCallCC Mtl.callCC 
+        where
+        liftCallCC callCC f = RespondT $ ReaderT $ \ r -> callCC $ \ c -> runRespondTBase (f (RespondT . ReaderT . const . c)) r
+
+instance Mtl.MonadState s m => Mtl.MonadState s (RespondT m) where
+    get = lift Mtl.get
+    put = lift . Mtl.put
+    state = lift . Mtl.state
 
 instance MonadLogger m => MonadLogger (RespondT m) where
     monadLoggerLog loc src level msg = lift $ monadLoggerLog loc src level msg
