@@ -1,35 +1,22 @@
-name: respond
-version: 1.0.0
-homepage:
-    https://github.com/raptros/respond
-license:
-    BSD3
-license-file:
-    LICENSE
-author:
-    aidan coyne
-maintainer:
-    coynea90@gmail.com
-copyright:
-    2014, aidan coyne
-category:
-    Web
-build-type:
-    Simple
-extra-source-files:
-    README.md
-cabal-version:
-    >=1.10
-bug-reports:
-    https://github.com/raptros/respond/issues
-synopsis:
-    process and route HTTP requests and generate responses on top of WAI
-description:
-    a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses. 
-    see the source repository for a simple example application.
+name:                   respond
+version:                1.1.0
+homepage:               https://github.com/raptros/respond
+license:                BSD3
+license-file:           LICENSE
+author:                 aidan coyne
+maintainer:             coynea90@gmail.com
+copyright:              2014, aidan coyne
+category:               Web
+build-type:             Simple
+extra-source-files:     README.md, CHANGELOG.md
+cabal-version:          >=1.10
+bug-reports:            https://github.com/raptros/respond/issues
+synopsis:               process and route HTTP requests and generate responses on top of WAI
+description:            a Haskell library built on top of WAI for processing and routing HTTP requests and generating responses.  see the source repository for a simple example application.
+
 
 source-repository head
-    type: git
+    type:     git
     location: https://github.com/raptros/respond.git
 
 library
