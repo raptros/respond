@@ -1,4 +1,4 @@
-# respond
+# respond [![Hackage](https://img.shields.io/hackage/v/respond.svg?style=flat)](http://hackage.haskell.org/package/respond)
 a Haskell library built on top of WAI for processing and routing HTTP requests
 and generating responses.
 
